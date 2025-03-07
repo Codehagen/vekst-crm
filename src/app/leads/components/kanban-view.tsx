@@ -202,7 +202,7 @@ export function KanbanView({ leads, onStatusChange }: KanbanViewProps) {
                                 <CardTitle className="text-sm font-medium">
                                   {lead.selskap ? (
                                     <a
-                                      href={`/bedrifter/${encodeURIComponent(
+                                      href={`/leads/${encodeURIComponent(
                                         lead.id
                                       )}`}
                                       className="hover:underline transition-colors hover:text-primary"

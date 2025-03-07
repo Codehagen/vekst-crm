@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import {
   Users,
   Building2,
@@ -28,6 +29,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 // Sample data for teams
 const teamsData = {
@@ -115,6 +118,20 @@ const crmItems = [
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname();
+
+  // Function to check if a navigation item is active
+  const isActive = (itemUrl: string) => {
+    // Check if the current path matches the item URL exactly
+    if (pathname === itemUrl) return true;
+
+    // Check if the current path starts with the item URL (for subpages)
+    // This handles cases like /bedrifter/[id] should highlight the /bedrifter menu item
+    if (itemUrl !== "/" && pathname.startsWith(itemUrl)) return true;
+
+    return false;
+  };
+
   // Group the navigation items by their group property
   const groupedItems = crmItems.reduce<Record<string, typeof crmItems>>(
     (acc, item) => {
@@ -142,11 +159,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.name}>
-                  <SidebarMenuButton asChild>
-                    <a href={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    className={cn(
+                      isActive(item.url) && "bg-accent text-accent-foreground"
+                    )}
+                  >
+                    <Link href={item.url}>
                       <item.icon />
                       <span>{item.name}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
