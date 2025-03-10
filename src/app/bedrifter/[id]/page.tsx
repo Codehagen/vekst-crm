@@ -42,13 +42,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+// Import server actions instead of mock API
 import {
   getBusinessById,
   getBusinessActivities,
   getBusinessContacts,
   getBusinessOffers,
-} from "@/lib/api";
-import { Business, Contact, Activity, Offer } from "@/lib/types";
+} from "../actions";
+import { Business, Contact, Activity, Offer } from "@prisma/client";
+import { BusinessWithRelations } from "@/lib/services/business-service";
 import { CreateOffer } from "./create-offer";
 
 export default function BusinessDetailPage() {
@@ -56,7 +58,7 @@ export default function BusinessDetailPage() {
   const id = typeof params.id === "string" ? params.id : "";
 
   const [loading, setLoading] = useState<boolean>(true);
-  const [business, setBusiness] = useState<Business | null>(null);
+  const [business, setBusiness] = useState<BusinessWithRelations | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -66,6 +68,7 @@ export default function BusinessDetailPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Use server actions to fetch data
         const businessData = await getBusinessById(id);
         if (businessData) {
           setBusiness(businessData);
@@ -83,6 +86,7 @@ export default function BusinessDetailPage() {
         }
       } catch (error) {
         console.error("Error fetching business data:", error);
+        toast.error("Failed to load business data");
       } finally {
         setLoading(false);
       }

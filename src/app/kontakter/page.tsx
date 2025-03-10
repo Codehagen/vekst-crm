@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -16,8 +19,31 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
+import { Contact } from "@prisma/client";
+import { getContacts } from "./actions";
+import { toast } from "sonner";
 
 export default function KontakterPage() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        setLoading(true);
+        const data = await getContacts();
+        setContacts(data);
+      } catch (error) {
+        console.error("Error fetching contacts:", error);
+        toast.error("Failed to load contacts");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContacts();
+  }, []);
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -59,9 +85,33 @@ export default function KontakterPage() {
               <CardTitle>Kontaktliste</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
-                Kontaktlisten vil vises her.
-              </p>
+              {loading ? (
+                <p className="text-muted-foreground">Laster kontakter...</p>
+              ) : contacts.length === 0 ? (
+                <p className="text-muted-foreground">
+                  Ingen kontakter funnet. Legg til din første kontakt for å
+                  komme i gang.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {contacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center justify-between p-4 border rounded-md"
+                    >
+                      <div>
+                        <h3 className="font-medium">{contact.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {contact.email}
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {contact.phone}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </main>

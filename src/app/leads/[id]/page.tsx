@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -21,68 +21,135 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import {
-  Building2,
+  User,
   Mail,
   Phone,
-  Globe,
-  Users,
+  Building2,
   Calendar,
-  FileText,
+  PencilLine,
+  ChevronRight,
+  DollarSign,
   Tag,
+  FileText,
   Plus,
-  BarChart3,
+  ExternalLink,
+  Clock,
+  Search,
+  Info,
+  CheckCircle,
+  Globe,
+  MoveUp,
+  ArrowUpCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-
 import {
-  getBusinessById,
-  getBusinessActivities,
-  getBusinessContacts,
-  getBusinessOffers,
-} from "@/lib/api";
-import { Business, Contact, Activity, Offer } from "@/lib/types";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+// Import lead actions
+import { getLeadById, updateLeadStatus } from "../actions";
+import { Business, CustomerStage } from "@prisma/client";
 import { CreateOffer } from "./create-offer";
+
+function getStatusBadgeProps(stage: CustomerStage) {
+  const stageMap: Record<
+    CustomerStage,
+    {
+      label: string;
+      variant: "default" | "outline" | "secondary" | "destructive" | "success";
+      icon: React.ReactNode;
+      description: string;
+    }
+  > = {
+    lead: {
+      label: "Ny",
+      variant: "secondary",
+      icon: <Info className="h-4 w-4" />,
+      description: "Ny lead som ikke er kontaktet",
+    },
+    prospect: {
+      label: "Kontaktet",
+      variant: "default",
+      icon: <Clock className="h-4 w-4" />,
+      description: "Lead som er i dialog",
+    },
+    qualified: {
+      label: "Kvalifisert",
+      variant: "default",
+      icon: <CheckCircle className="h-4 w-4" />,
+      description: "Kvalifisert lead klar for tilbud",
+    },
+    customer: {
+      label: "Kunde",
+      variant: "success",
+      icon: <ArrowUpCircle className="h-4 w-4" />,
+      description: "Konvertert til aktiv kunde",
+    },
+    churned: {
+      label: "Tapt",
+      variant: "destructive",
+      icon: <AlertCircle className="h-4 w-4" />,
+      description: "Tapt lead",
+    },
+  };
+
+  return stageMap[stage];
+}
 
 export default function LeadDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
 
   const [loading, setLoading] = useState<boolean>(true);
-  const [business, setBusiness] = useState<Business | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [lead, setLead] = useState<Business | null>(null);
   const [showCreateOffer, setShowCreateOffer] = useState(false);
+  const [showStageDialog, setShowStageDialog] = useState(false);
+  const [isChangingStage, setIsChangingStage] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const businessData = await getBusinessById(id);
-        if (businessData) {
-          setBusiness(businessData);
-
-          // Fetch additional data in parallel
-          const [contactsData, activitiesData, offersData] = await Promise.all([
-            getBusinessContacts(id),
-            getBusinessActivities(id),
-            getBusinessOffers(id),
-          ]);
-
-          setContacts(contactsData);
-          setActivities(activitiesData);
-          setOffers(offersData);
+        const leadData = await getLeadById(id);
+        if (leadData) {
+          setLead(leadData);
+        } else {
+          toast.error("Lead ikke funnet");
         }
       } catch (error) {
-        console.error("Error fetching business data:", error);
+        console.error("Error fetching lead data:", error);
+        toast.error("Kunne ikke hente lead-informasjon");
       } finally {
         setLoading(false);
       }
@@ -93,16 +160,155 @@ export default function LeadDetailPage() {
     }
   }, [id]);
 
-  const handleOfferSubmit = (offer: Omit<Offer, "id">) => {
-    const newOffer: Offer = {
-      ...offer,
-      id: `temp-${Date.now()}`,
-    };
-
-    setOffers([newOffer, ...offers]);
+  // Handle offer creation
+  const handleOfferSubmit = (offer: any) => {
+    // In a real implementation, this would save to the database
+    toast.success("Tilbudet ble lagret (Simulert)");
     setShowCreateOffer(false);
-    toast.success("Tilbudet ble lagret");
   };
+
+  // Handle lead stage update
+  const handleStageChange = async (newStage: CustomerStage) => {
+    if (!lead) return;
+
+    const oldStage = lead.stage;
+    if (oldStage === newStage) {
+      setShowStageDialog(false);
+      return;
+    }
+
+    try {
+      setIsChangingStage(true);
+
+      // Optimistic update
+      setLead((prev) => (prev ? { ...prev, stage: newStage } : null));
+
+      // Update in database
+      await updateLeadStatus(lead.id, newStage);
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <div className="font-medium">Status oppdatert</div>
+          <div className="text-sm text-muted-foreground">
+            <span className="font-medium">{lead.name}</span> ble flyttet fra{" "}
+            <Badge variant="outline" className="ml-1 mr-1">
+              {getStatusBadgeProps(oldStage).label}
+            </Badge>
+            <span>→</span>
+            <Badge variant="outline" className="ml-1">
+              {getStatusBadgeProps(newStage).label}
+            </Badge>
+          </div>
+        </div>
+      );
+
+      // Redirect to customers page if stage is 'customer'
+      if (newStage === "customer") {
+        toast.success("Lead er nå konvertert til kunde!", {
+          description: "Du blir videresendt til kundeoversikten...",
+          duration: 3000,
+        });
+        setTimeout(() => {
+          router.push("/bedrifter");
+        }, 2000);
+      }
+    } catch (error) {
+      // Revert on error
+      setLead((prev) => (prev ? { ...prev, stage: oldStage } : null));
+      console.error("Error updating lead stage:", error);
+      toast.error("Kunne ikke oppdatere statusen");
+    } finally {
+      setIsChangingStage(false);
+      setShowStageDialog(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <div className="flex items-center gap-2 px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href="/">CRM System</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/leads">Leads</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>
+                      <Skeleton className="h-4 w-24" />
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          <main className="p-6">
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-60" />
+                  <Skeleton className="h-4 w-40" />
+                </div>
+              </div>
+
+              <Skeleton className="h-[400px] w-full" />
+            </div>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
+  if (!lead) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <div className="flex items-center gap-2 px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href="/">CRM System</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/leads">Leads</BreadcrumbLink>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          <main className="p-6 text-center">
+            <h1 className="text-2xl font-bold mb-2">Fant ikke lead</h1>
+            <p className="text-muted-foreground mb-6">
+              Lead med ID {id} ble ikke funnet
+            </p>
+            <Button asChild>
+              <a href="/leads">Tilbake til leads</a>
+            </Button>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
+  // If we have a lead, render the lead details
+  const statusProps = getStatusBadgeProps(lead.stage);
 
   return (
     <SidebarProvider>
@@ -123,13 +329,7 @@ export default function LeadDetailPage() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    {loading ? (
-                      <Skeleton className="h-4 w-24" />
-                    ) : (
-                      business?.name || "Lead-detaljer"
-                    )}
-                  </BreadcrumbPage>
+                  <BreadcrumbPage>{lead.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -137,70 +337,58 @@ export default function LeadDetailPage() {
         </header>
 
         <main className="p-6">
-          {loading ? (
-            // Loading state
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-60" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-              </div>
-
-              <Skeleton className="h-[400px] w-full" />
-            </div>
-          ) : business ? (
-            // Business data display
-            <div className="space-y-6">
-              {/* Business Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-6">
+            {/* Lead Header */}
+            <div className="bg-white p-6 rounded-lg border shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                 <div className="flex items-start gap-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                    <Building2 className="h-8 w-8 text-muted-foreground" />
+                    <User className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <div>
                     <h1 className="text-3xl font-bold tracking-tight">
-                      {business.name}
+                      {lead.name}
                     </h1>
-                    <p className="text-muted-foreground mt-2">
-                      Detaljert informasjon om lead
-                    </p>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <span>
-                        Org.nr:
-                        <a
-                          href={`https://proff.no/bransjesøk?q=${business.orgNumber}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline ml-1"
-                        >
-                          {business.orgNumber}
-                        </a>
-                      </span>
+                    <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                      <span>{lead.contactPerson || lead.name}</span>
                       <span>•</span>
-                      <Badge
-                        variant={
-                          business.status === "active"
-                            ? "outline"
-                            : business.status === "inactive"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {business.status === "active"
-                          ? "Aktiv"
-                          : business.status === "inactive"
-                          ? "Inaktiv"
-                          : "Lead"}
-                      </Badge>
-                      {business.bilagCount > 0 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant={
+                                statusProps.variant as
+                                  | "default"
+                                  | "destructive"
+                                  | "outline"
+                                  | "secondary"
+                                  | null
+                              }
+                              className="flex items-center gap-1 cursor-help"
+                            >
+                              {statusProps.icon}
+                              {statusProps.label}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{statusProps.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      {lead.orgNumber && (
                         <>
                           <span>•</span>
-                          <Badge variant="outline" className="bg-amber-50">
-                            <FileText className="mr-1 h-3 w-3" />
-                            {business.bilagCount} bilag
-                          </Badge>
+                          <span>
+                            Org.nr:
+                            <a
+                              href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline ml-1"
+                            >
+                              {lead.orgNumber}
+                            </a>
+                          </span>
                         </>
                       )}
                     </div>
@@ -208,517 +396,448 @@ export default function LeadDetailPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {business.tags?.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="capitalize">
-                      {tag}
-                    </Badge>
-                  ))}
+                  <Button variant="outline" className="gap-2">
+                    <PencilLine className="h-4 w-4" /> Rediger
+                  </Button>
+
+                  <Dialog
+                    open={showStageDialog}
+                    onOpenChange={setShowStageDialog}
+                  >
+                    <DialogTrigger asChild>
+                      <Button variant="default" className="gap-2">
+                        <MoveUp className="h-4 w-4" /> Endre status
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Endre status for {lead.name}</DialogTitle>
+                        <DialogDescription>
+                          Velg ny status for denne leaden. Dette vil oppdatere
+                          oppfølgningsstatus.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        {Object.entries(getStatusBadgeProps).length > 0 &&
+                          Object.entries(CustomerStage).map(([key, stage]) => (
+                            <Button
+                              key={key}
+                              variant={
+                                stage === lead.stage ? "secondary" : "outline"
+                              }
+                              className="justify-start gap-2 h-auto py-3"
+                              disabled={isChangingStage}
+                              onClick={() => handleStageChange(stage)}
+                            >
+                              {getStatusBadgeProps(stage).icon}
+                              <div className="flex flex-col items-start">
+                                <span>{getStatusBadgeProps(stage).label}</span>
+                                <span className="text-xs text-muted-foreground font-normal">
+                                  {getStatusBadgeProps(stage).description}
+                                </span>
+                              </div>
+                              {stage === lead.stage && (
+                                <CheckCircle className="h-4 w-4 ml-auto" />
+                              )}
+                            </Button>
+                          ))}
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowStageDialog(false)}
+                          disabled={isChangingStage}
+                        >
+                          Avbryt
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
 
-              {/* Tabs Interface */}
-              <Tabs defaultValue="info" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="info">Bedriftsinformasjon</TabsTrigger>
-                  <TabsTrigger value="contacts">Kontaktinfo</TabsTrigger>
-                  <TabsTrigger value="offers">Tilbud</TabsTrigger>
-                </TabsList>
+              {/* Quick Info Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <Card className="bg-blue-50/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Kontaktinfo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{lead.email}</p>
+                      <p className="text-sm">{lead.phone}</p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Info Tab */}
-                <TabsContent value="info" className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {/* Contact Information */}
+                <Card className="bg-amber-50/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Potensiell verdi
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xl font-semibold">
+                      {lead.potensiellVerdi
+                        ? new Intl.NumberFormat("no-NO", {
+                            style: "currency",
+                            currency: "NOK",
+                          }).format(lead.potensiellVerdi)
+                        : "Ikke angitt"}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-green-50/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Registrert dato
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm font-medium">
+                      {new Date(lead.createdAt).toLocaleDateString("no-NO")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {`${Math.floor(
+                        (Date.now() - new Date(lead.createdAt).getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      )} dager siden`}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            {/* Main Content */}
+            <Tabs defaultValue="details" className="space-y-4">
+              <TabsList className="w-full md:w-auto">
+                <TabsTrigger value="details">Detaljer</TabsTrigger>
+                <TabsTrigger value="activities">Aktiviteter</TabsTrigger>
+                <TabsTrigger value="offers">Tilbud</TabsTrigger>
+                <TabsTrigger value="notes">Notater</TabsTrigger>
+                {lead.orgNumber && (
+                  <TabsTrigger value="proff">Proff Info</TabsTrigger>
+                )}
+              </TabsList>
+
+              <TabsContent value="details" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Kontaktinformasjon</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4">
+                      <div className="flex items-start">
+                        <span className="w-24 flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          Navn:
+                        </span>
+                        <span>{lead.name}</span>
+                      </div>
+
+                      <div className="flex items-start">
+                        <span className="w-24 flex items-center gap-2 text-muted-foreground">
+                          <Mail className="h-4 w-4" />
+                          E-post:
+                        </span>
+                        <a
+                          href={`mailto:${lead.email}`}
+                          className="text-primary hover:underline"
+                        >
+                          {lead.email}
+                        </a>
+                      </div>
+
+                      <div className="flex items-start">
+                        <span className="w-24 flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-4 w-4" />
+                          Telefon:
+                        </span>
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="text-primary hover:underline"
+                        >
+                          {lead.phone}
+                        </a>
+                      </div>
+
+                      {lead.orgNumber && (
+                        <div className="flex items-start">
+                          <span className="w-24 flex items-center gap-2 text-muted-foreground">
+                            <Building2 className="h-4 w-4" />
+                            Org.nr:
+                          </span>
+                          <a
+                            href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            {lead.orgNumber}
+                          </a>
+                        </div>
+                      )}
+
+                      {lead.website && (
+                        <div className="flex items-start">
+                          <span className="w-24 flex items-center gap-2 text-muted-foreground">
+                            <Globe className="h-4 w-4" />
+                            Nettside:
+                          </span>
+                          <a
+                            href={
+                              lead.website?.startsWith("http")
+                                ? lead.website
+                                : `https://${lead.website}`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            {lead.website}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Lead-informasjon</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4">
+                      <div className="flex items-start">
+                        <span className="w-36 flex items-center gap-2 text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          Registrert dato:
+                        </span>
+                        <span>
+                          {new Date(lead.createdAt).toLocaleDateString("no-NO")}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start">
+                        <span className="w-36 flex items-center gap-2 text-muted-foreground">
+                          <DollarSign className="h-4 w-4" />
+                          Potensiell verdi:
+                        </span>
+                        <span>
+                          {lead.potensiellVerdi
+                            ? new Intl.NumberFormat("no-NO", {
+                                style: "currency",
+                                currency: "NOK",
+                              }).format(lead.potensiellVerdi)
+                            : "Ikke angitt"}
+                        </span>
+                      </div>
+
+                      {lead.notes && (
+                        <div className="flex items-start">
+                          <span className="w-36 flex items-center gap-2 text-muted-foreground">
+                            <FileText className="h-4 w-4" />
+                            Notater:
+                          </span>
+                          <span className="whitespace-pre-wrap">
+                            {lead.notes}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {lead.address && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Adresseinformasjon</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <address className="not-italic">
+                        {lead.address}
+                        <br />
+                        {lead.postalCode} {lead.city}
+                        <br />
+                        {lead.country}
+                      </address>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="activities">
+                {/* Activities Tab Content */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle>Aktiviteter</CardTitle>
+                    <Button size="sm" className="gap-1">
+                      <Plus className="h-4 w-4" /> Legg til aktivitet
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-6">
+                      <p className="text-muted-foreground">
+                        Ingen aktiviteter registrert
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="offers">
+                <div className="space-y-4">
+                  {showCreateOffer ? (
                     <Card>
                       <CardHeader>
-                        <CardTitle>Kontaktinformasjon</CardTitle>
+                        <CardTitle>Opprett nytt tilbud</CardTitle>
+                        <CardDescription>
+                          Fyll ut informasjonen for å opprette et nytt tilbud
+                          til {lead.name}
+                        </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex flex-col space-y-2">
-                          <div className="flex items-start">
-                            <span className="w-24 flex items-center gap-2 text-muted-foreground">
-                              <Mail className="h-4 w-4" />
-                              E-post:
-                            </span>
-                            <a
-                              href={`mailto:${business.email}`}
-                              className="text-primary hover:underline"
-                            >
-                              {business.email}
-                            </a>
-                          </div>
-
-                          <div className="flex items-start">
-                            <span className="w-24 flex items-center gap-2 text-muted-foreground">
-                              <Phone className="h-4 w-4" />
-                              Telefon:
-                            </span>
-                            <a
-                              href={`tel:${business.phone}`}
-                              className="hover:underline"
-                            >
-                              {business.phone}
-                            </a>
-                          </div>
-
-                          {/* Website field */}
-                          {business.website && (
-                            <div className="flex items-start">
-                              <span className="w-24 flex items-center gap-2 text-muted-foreground">
-                                <Globe className="h-4 w-4" />
-                                Nettside:
-                              </span>
-                              <a
-                                href={
-                                  business.website.startsWith("http")
-                                    ? business.website
-                                    : `https://${business.website}`
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline"
-                              >
-                                {business.website}
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Regnskapstall field */}
-                          <div className="flex items-start">
-                            <span className="w-24 text-muted-foreground">
-                              Regnskapstall:
-                            </span>
-                            <a
-                              href={`https://proff.no/bransjesøk?q=${business.orgNumber}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline"
-                            >
-                              proff.no
-                            </a>
-                          </div>
-
-                          <div className="pt-2">
-                            <h4 className="text-sm font-medium mb-1">
-                              Adresse
-                            </h4>
-                            <address className="not-italic text-muted-foreground">
-                              {business.address}
-                              <br />
-                              {business.postalCode} {business.city}
-                              <br />
-                              {business.country}
-                            </address>
-                          </div>
-                        </div>
+                      <CardContent>
+                        <CreateOffer
+                          business={lead}
+                          onSubmit={handleOfferSubmit}
+                          onCancel={() => setShowCreateOffer(false)}
+                        />
                       </CardContent>
                     </Card>
+                  ) : (
+                    <div className="flex justify-end">
+                      <Button
+                        className="gap-2"
+                        onClick={() => setShowCreateOffer(true)}
+                      >
+                        <Plus className="h-4 w-4" /> Opprett tilbud
+                      </Button>
+                    </div>
+                  )}
 
-                    {/* Business Details */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Detaljer</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {business.industry && (
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">Bransje:</span>
-                            <span>{business.industry}</span>
-                          </div>
-                        )}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Tilbud</CardTitle>
+                      <CardDescription>
+                        Tilbud sendt til {lead.name}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-center py-6">
+                        <p className="text-muted-foreground">
+                          Ingen tilbud registrert
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
 
-                        {business.numberOfEmployees !== undefined && (
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">Antall ansatte:</span>
-                            <span>{business.numberOfEmployees}</span>
-                          </div>
-                        )}
+              <TabsContent value="notes">
+                {/* Notes Tab Content */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle>Notater</CardTitle>
+                    <Button size="sm" className="gap-1">
+                      <Plus className="h-4 w-4" /> Legg til notat
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    {lead.notes ? (
+                      <div className="whitespace-pre-wrap p-4 bg-slate-50 rounded-md">
+                        {lead.notes}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-muted-foreground">
+                          Ingen notater registrert
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
+              {lead.orgNumber && (
+                <TabsContent value="proff">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        Proff.no Informasjon
+                        <Badge variant="outline" className="ml-2">
+                          Ekstern
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Hent oppdatert informasjon fra Proff.no
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">Opprettet:</span>
-                          <span>
-                            {business.createdAt.toLocaleDateString("no-NO")}
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            Søk etter {lead.name} på Proff.no:
                           </span>
                         </div>
 
-                        <div className="mt-4">
-                          <h4 className="text-sm font-medium mb-1">Bilag</h4>
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span>Antall bilag:</span>
-                            <Badge variant="outline">
-                              {business.bilagCount}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Notes */}
-                    {business.notes && (
-                      <Card className="md:col-span-2">
-                        <CardHeader>
-                          <CardTitle>Notater</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="whitespace-pre-line">
-                            {business.notes}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </TabsContent>
-
-                {/* Contacts Tab */}
-                <TabsContent value="contacts">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Kontakter</CardTitle>
-                      <CardDescription>
-                        Kontaktpersoner hos {business.name}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {contacts.length > 0 ? (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {contacts.map((contact) => (
-                            <Card key={contact.id}>
-                              <CardHeader>
-                                <div className="flex justify-between items-start">
-                                  <CardTitle className="text-base">
-                                    {contact.name}
-                                  </CardTitle>
-                                  {contact.isPrimary && (
-                                    <Badge>Primær kontakt</Badge>
-                                  )}
-                                </div>
-                                {contact.position && (
-                                  <CardDescription>
-                                    {contact.position}
-                                  </CardDescription>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <a
-                                      href={`mailto:${contact.email}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      {contact.email}
-                                    </a>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <a
-                                      href={`tel:${contact.phone}`}
-                                      className="hover:underline"
-                                    >
-                                      {contact.phone}
-                                    </a>
-                                  </div>
-                                  {contact.notes && (
-                                    <div className="pt-2 border-t mt-2">
-                                      <p className="text-sm text-muted-foreground">
-                                        {contact.notes}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p>Ingen kontaktpersoner registrert</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                {/* Activities Tab */}
-                <TabsContent value="activities">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Aktivitetslogg</CardTitle>
-                      <CardDescription>
-                        Historikk over aktiviteter med {business.name}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {activities.length > 0 ? (
-                        <div className="space-y-4">
-                          {activities.map((activity) => (
-                            <div
-                              key={activity.id}
-                              className="flex gap-4 p-4 border rounded-lg"
+                        <div className="flex flex-wrap gap-3">
+                          <Button variant="outline" asChild className="gap-2">
+                            <a
+                              href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                             >
-                              <div
-                                className={`rounded-full p-2 h-10 w-10 flex items-center justify-center ${
-                                  activity.type === "meeting"
-                                    ? "bg-blue-50"
-                                    : activity.type === "call"
-                                    ? "bg-green-50"
-                                    : activity.type === "email"
-                                    ? "bg-amber-50"
-                                    : "bg-gray-50"
-                                }`}
-                              >
-                                {activity.type === "meeting" ? (
-                                  <Users className="h-5 w-5 text-blue-600" />
-                                ) : activity.type === "call" ? (
-                                  <Phone className="h-5 w-5 text-green-600" />
-                                ) : activity.type === "email" ? (
-                                  <Mail className="h-5 w-5 text-amber-600" />
-                                ) : (
-                                  <FileText className="h-5 w-5 text-gray-600" />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between">
-                                  <h4 className="font-medium capitalize">
-                                    {activity.type}
-                                  </h4>
-                                  <time className="text-sm text-muted-foreground">
-                                    {activity.date.toLocaleDateString("no-NO")}
-                                  </time>
-                                </div>
-                                <p className="mt-1">{activity.description}</p>
-                                {activity.outcome && (
-                                  <p className="mt-2 text-sm text-muted-foreground">
-                                    <strong>Resultat:</strong>{" "}
-                                    {activity.outcome}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                              <Search className="h-4 w-4" /> Søk med org.nummer
+                            </a>
+                          </Button>
+
+                          <Button variant="outline" asChild className="gap-2">
+                            <a
+                              href={`https://proff.no/bransjesøk?q=${encodeURIComponent(
+                                lead.name
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Search className="h-4 w-4" /> Søk med navn
+                            </a>
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p>Ingen aktiviteter registrert</p>
+
+                        <div className="mt-6 p-4 bg-slate-50 rounded-md">
+                          <h3 className="text-sm font-medium mb-2">
+                            Regnskapstall og nøkkelinformasjon
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Proff.no inneholder oppdatert regnskapstall, roller
+                            og nøkkelinformasjon om norske bedrifter.
+                          </p>
+                          <Button variant="default" asChild>
+                            <a
+                              href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="gap-1"
+                            >
+                              <ExternalLink className="h-4 w-4" /> Åpne i
+                              Proff.no
+                            </a>
+                          </Button>
                         </div>
-                      )}
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
-
-                {/* Offers Tab */}
-                <TabsContent value="offers">
-                  <div className="space-y-4">
-                    {!showCreateOffer && (
-                      <div className="flex justify-end">
-                        <Button onClick={() => setShowCreateOffer(true)}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Opprett nytt tilbud
-                        </Button>
-                      </div>
-                    )}
-
-                    {showCreateOffer ? (
-                      <CreateOffer
-                        business={business}
-                        onCancel={() => setShowCreateOffer(false)}
-                        onSubmit={handleOfferSubmit}
-                      />
-                    ) : (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Tilbud</CardTitle>
-                          <CardDescription>
-                            Tilbud sendt til {business.name}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {offers.length > 0 ? (
-                            <div className="space-y-4">
-                              {offers.map((offer) => (
-                                <Card key={offer.id}>
-                                  <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                      <CardTitle className="text-base">
-                                        {offer.title}
-                                      </CardTitle>
-                                      <Badge
-                                        variant={
-                                          offer.status === "draft"
-                                            ? "secondary"
-                                            : offer.status === "sent"
-                                            ? "default"
-                                            : offer.status === "accepted"
-                                            ? "outline"
-                                            : offer.status === "rejected"
-                                            ? "destructive"
-                                            : "outline"
-                                        }
-                                      >
-                                        {offer.status === "draft"
-                                          ? "Utkast"
-                                          : offer.status === "sent"
-                                          ? "Sendt"
-                                          : offer.status === "accepted"
-                                          ? "Akseptert"
-                                          : offer.status === "rejected"
-                                          ? "Avslått"
-                                          : "Utløpt"}
-                                      </Badge>
-                                    </div>
-                                    <div className="mt-1 text-sm text-muted-foreground">
-                                      <span className="inline-block mr-4">
-                                        Opprettet:{" "}
-                                        {offer.createdAt.toLocaleDateString(
-                                          "no-NO"
-                                        )}
-                                      </span>
-                                      <span className="inline-block mr-4">
-                                        Utløper:{" "}
-                                        {offer.expiresAt.toLocaleDateString(
-                                          "no-NO"
-                                        )}
-                                      </span>
-                                      <span className="inline-block font-medium">
-                                        {new Intl.NumberFormat("no-NO", {
-                                          style: "currency",
-                                          currency: offer.currency,
-                                          maximumFractionDigits: 0,
-                                        }).format(offer.totalAmount)}
-                                      </span>
-                                    </div>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <div className="space-y-4">
-                                      <p>{offer.description}</p>
-
-                                      <div className="border rounded-lg overflow-hidden">
-                                        <table className="min-w-full divide-y divide-border">
-                                          <thead className="bg-muted">
-                                            <tr>
-                                              <th
-                                                scope="col"
-                                                className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                                              >
-                                                Beskrivelse
-                                              </th>
-                                              <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                                              >
-                                                Antall
-                                              </th>
-                                              <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                                              >
-                                                Pris
-                                              </th>
-                                              <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                                              >
-                                                Sum
-                                              </th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="bg-card divide-y divide-border">
-                                            {offer.items.map(
-                                              (item, itemIndex) => (
-                                                <tr key={item.id}>
-                                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                    {item.description}
-                                                    {item.discount && (
-                                                      <span className="text-xs ml-2 text-green-600">
-                                                        ({item.discount}%
-                                                        rabatt)
-                                                      </span>
-                                                    )}
-                                                  </td>
-                                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                                                    {item.quantity}
-                                                  </td>
-                                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                                                    {new Intl.NumberFormat(
-                                                      "no-NO",
-                                                      {
-                                                        style: "currency",
-                                                        currency:
-                                                          offer.currency,
-                                                        maximumFractionDigits: 0,
-                                                      }
-                                                    ).format(item.unitPrice)}
-                                                  </td>
-                                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-right">
-                                                    {new Intl.NumberFormat(
-                                                      "no-NO",
-                                                      {
-                                                        style: "currency",
-                                                        currency:
-                                                          offer.currency,
-                                                        maximumFractionDigits: 0,
-                                                      }
-                                                    ).format(item.total)}
-                                                  </td>
-                                                </tr>
-                                              )
-                                            )}
-                                            <tr className="bg-muted/50">
-                                              <td
-                                                colSpan={3}
-                                                className="px-4 py-3 whitespace-nowrap text-sm font-medium text-right"
-                                              >
-                                                Total
-                                              </td>
-                                              <td className="px-4 py-3 whitespace-nowrap text-base font-bold text-right">
-                                                {new Intl.NumberFormat(
-                                                  "no-NO",
-                                                  {
-                                                    style: "currency",
-                                                    currency: offer.currency,
-                                                    maximumFractionDigits: 0,
-                                                  }
-                                                ).format(offer.totalAmount)}
-                                              </td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
-                                      </div>
-
-                                      {offer.notes && (
-                                        <div className="text-sm text-muted-foreground border-t pt-3 mt-3">
-                                          <p>{offer.notes}</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 text-muted-foreground">
-                              <p>Ingen tilbud registrert</p>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : (
-            // No business found
-            <div className="text-center py-12">
-              <h2 className="text-2xl font-bold mb-2">Fant ikke bedriften</h2>
-              <p className="text-muted-foreground">
-                Bedriften med ID {id} ble ikke funnet
-              </p>
-            </div>
-          )}
+              )}
+            </Tabs>
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>

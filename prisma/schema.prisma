@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Used for direct database connections
+}
+
+// Unified Business/Lead model - Represents companies at any stage (lead to customer)
+model Business {
+  id                String         @id @default(cuid())
+  name              String
+  orgNumber         String?        @unique // Optional for early-stage leads
+  address           String?
+  postalCode        String?
+  city              String?
+  country           String?
+  contactPerson     String?
+  email             String
+  phone             String
+  website           String?
+  industry          String?
+  numberOfEmployees Int?
+  revenue           Float?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  bilagCount        Int            @default(0)
+  status            BusinessStatus
+  stage             CustomerStage  @default(lead) // Tracks customer lifecycle
+
+  // Fields specifically for leads
+  potensiellVerdi Float? // Potential value (only relevant for leads)
+
+  // Relations
+  contacts   Contact[]
+  activities Activity[]
+  offers     Offer[]
+  tags       Tag[]      @relation("BusinessToTag")
+
+  @@map("businesses")
+}
+
+enum BusinessStatus {
+  active
+  inactive
+}
+
+enum CustomerStage {
+  lead
+  prospect
+  qualified
+  customer
+  churned
+
+  @@map("customer_stage")
+}
+
+// Tag model - For categorizing businesses
+model Tag {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  businesses Business[] @relation("BusinessToTag")
+
+  @@map("tags")
+}
+
+// Contact model - People associated with businesses
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String
+  position  String?
+  isPrimary Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  activities Activity[]
+  offers     Offer[]
+
+  @@map("contacts")
+}
+
+// Activity model - Interactions with businesses/contacts
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  date        DateTime
+  description String
+  completed   Boolean      @default(false)
+  outcome     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId  String?
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  userId     String // We would typically have a User model
+
+  @@map("activities")
+}
+
+enum ActivityType {
+  call
+  meeting
+  email
+  note
+
+  @@map("activity_type")
+}
+
+// Offer model - Sales proposals to businesses
+model Offer {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  createdAt   DateTime    @default(now())
+  expiresAt   DateTime
+  status      OfferStatus
+  totalAmount Float
+  currency    String
+  notes       String?
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  businessId String
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId  String?
+  contact    Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  items      OfferItem[]
+
+  @@map("offers")
+}
+
+enum OfferStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+
+  @@map("offer_status")
+}
+
+// OfferItem model - Line items in an offer
+model OfferItem {
+  id          String @id @default(cuid())
+  description String
+  quantity    Int
+  unitPrice   Float
+  discount    Float?
+  tax         Float?
+  total       Float
+
+  // Relations
+  offerId String
+  offer   Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@map("offer_items")
+}

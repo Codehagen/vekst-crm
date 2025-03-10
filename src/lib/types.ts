@@ -1,24 +1,28 @@
+import { BusinessStatus, CustomerStage } from "@prisma/client";
+
 export interface Business {
   id: string;
   name: string;
-  orgNumber: string;
-  address: string;
-  postalCode: string;
-  city: string;
-  country: string;
-  contactPerson: string;
+  orgNumber?: string | null;
+  address?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+  contactPerson?: string | null;
   email: string;
   phone: string;
-  website?: string;
-  industry?: string;
-  numberOfEmployees?: number;
-  revenue?: number;
-  notes?: string;
+  website?: string | null;
+  industry?: string | null;
+  numberOfEmployees?: number | null;
+  revenue?: number | null;
+  notes?: string | null;
   createdAt: Date;
   updatedAt: Date;
   bilagCount: number; // Number of accounting attachments
-  status: "active" | "inactive" | "lead";
-  tags?: string[];
+  status: BusinessStatus;
+  stage: CustomerStage;
+  potensiellVerdi?: number | null;
+  tags?: { name: string }[];
   contacts?: Contact[];
   activities?: Activity[];
   offers?: Offer[];
