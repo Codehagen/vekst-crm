@@ -50,6 +50,7 @@ import {
   MoveUp,
   ArrowUpCircle,
   AlertCircle,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +81,11 @@ import {
 import { getLeadById, updateLeadStatus } from "../actions";
 import { Business, CustomerStage } from "@prisma/client";
 import { CreateOffer } from "./create-offer";
+import { SendSmsDialog } from "./send-sms-dialog";
+import { LeadActivity } from "./lead-activity";
+import { LeadNotes } from "./lead-notes";
+import { LeadOffers } from "./lead-offers";
+import { LeadProffInfo } from "./lead-proff-info";
 
 function getStatusBadgeProps(stage: CustomerStage) {
   const stageMap: Record<
@@ -235,7 +241,7 @@ export default function LeadDetailPage() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="/">CRM System</BreadcrumbLink>
+                    <BreadcrumbLink href="/">Dashboard</BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden md:block" />
                   <BreadcrumbItem>
@@ -282,7 +288,7 @@ export default function LeadDetailPage() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="/">CRM System</BreadcrumbLink>
+                    <BreadcrumbLink href="/">Dashboard</BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden md:block" />
                   <BreadcrumbItem>
@@ -349,7 +355,7 @@ export default function LeadDetailPage() {
                     <h1 className="text-3xl font-bold tracking-tight">
                       {lead.name}
                     </h1>
-                    <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                    <div className="flex flex-wrap items-center gap-2 text-muted-foreground mt-1">
                       <span>{lead.contactPerson || lead.name}</span>
                       <span>•</span>
                       <TooltipProvider>
@@ -396,7 +402,16 @@ export default function LeadDetailPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" className="gap-2">
+                  <SendSmsDialog
+                    lead={lead}
+                    trigger={
+                      <Button variant="outline" className="gap-2">
+                        <MessageSquare className="h-4 w-4" /> Send SMS
+                      </Button>
+                    }
+                  />
+
+                  <Button variant="outline" disabled className="gap-2">
                     <PencilLine className="h-4 w-4" /> Rediger
                   </Button>
 
@@ -405,7 +420,7 @@ export default function LeadDetailPage() {
                     onOpenChange={setShowStageDialog}
                   >
                     <DialogTrigger asChild>
-                      <Button variant="default" className="gap-2">
+                      <Button variant="default" disabled className="gap-2">
                         <MoveUp className="h-4 w-4" /> Endre status
                       </Button>
                     </DialogTrigger>
@@ -457,8 +472,8 @@ export default function LeadDetailPage() {
               </div>
 
               {/* Quick Info Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <Card className="bg-blue-50/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                <Card className="bg-blue-50/50 border-blue-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
                       <Mail className="h-4 w-4 mr-2" />
@@ -467,13 +482,25 @@ export default function LeadDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">{lead.email}</p>
-                      <p className="text-sm">{lead.phone}</p>
+                      <a
+                        href={`mailto:${lead.email}`}
+                        className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Mail className="h-3 w-3" />
+                        {lead.email}
+                      </a>
+                      <a
+                        href={`tel:${lead.phone}`}
+                        className="text-sm hover:underline flex items-center gap-1"
+                      >
+                        <Phone className="h-3 w-3" />
+                        {lead.phone}
+                      </a>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-amber-50/50">
+                <Card className="bg-amber-50/50 border-amber-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
                       <DollarSign className="h-4 w-4 mr-2" />
@@ -486,13 +513,14 @@ export default function LeadDetailPage() {
                         ? new Intl.NumberFormat("no-NO", {
                             style: "currency",
                             currency: "NOK",
+                            maximumFractionDigits: 0,
                           }).format(lead.potensiellVerdi)
                         : "Ikke angitt"}
                     </p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-green-50/50">
+                <Card className="bg-green-50/50 border-green-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
                       <Calendar className="h-4 w-4 mr-2" />
@@ -511,6 +539,52 @@ export default function LeadDetailPage() {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card
+                  className={`${
+                    statusProps.variant === "success"
+                      ? "bg-green-50/50 border-green-100"
+                      : statusProps.variant === "destructive"
+                      ? "bg-red-50/50 border-red-100"
+                      : "bg-blue-50/50 border-blue-100"
+                  }`}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                      <Info className="h-4 w-4 mr-2" />
+                      Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          statusProps.variant as
+                            | "default"
+                            | "destructive"
+                            | "outline"
+                            | "secondary"
+                            | null
+                        }
+                        className="flex items-center gap-1"
+                      >
+                        {statusProps.icon}
+                        {statusProps.label}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setShowStageDialog(true)}
+                      >
+                        Endre
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {statusProps.description}
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </div>
 
@@ -519,8 +593,8 @@ export default function LeadDetailPage() {
               <TabsList className="w-full md:w-auto">
                 <TabsTrigger value="details">Detaljer</TabsTrigger>
                 <TabsTrigger value="activities">Aktiviteter</TabsTrigger>
-                <TabsTrigger value="offers">Tilbud</TabsTrigger>
-                <TabsTrigger value="notes">Notater</TabsTrigger>
+                {/* <TabsTrigger value="offers">Tilbud</TabsTrigger>
+                <TabsTrigger value="notes">Notater</TabsTrigger> */}
                 {lead.orgNumber && (
                   <TabsTrigger value="proff">Proff Info</TabsTrigger>
                 )}
@@ -634,6 +708,7 @@ export default function LeadDetailPage() {
                             ? new Intl.NumberFormat("no-NO", {
                                 style: "currency",
                                 currency: "NOK",
+                                maximumFractionDigits: 0,
                               }).format(lead.potensiellVerdi)
                             : "Ikke angitt"}
                         </span>
@@ -673,20 +748,10 @@ export default function LeadDetailPage() {
               </TabsContent>
 
               <TabsContent value="activities">
-                {/* Activities Tab Content */}
+                {/* Updated Activities Tab Content using LeadActivity component */}
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle>Aktiviteter</CardTitle>
-                    <Button size="sm" className="gap-1">
-                      <Plus className="h-4 w-4" /> Legg til aktivitet
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-center py-6">
-                      <p className="text-muted-foreground">
-                        Ingen aktiviteter registrert
-                      </p>
-                    </div>
+                  <CardContent className="pt-6">
+                    <LeadActivity lead={lead} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -711,55 +776,24 @@ export default function LeadDetailPage() {
                       </CardContent>
                     </Card>
                   ) : (
-                    <div className="flex justify-end">
-                      <Button
-                        className="gap-2"
-                        onClick={() => setShowCreateOffer(true)}
-                      >
-                        <Plus className="h-4 w-4" /> Opprett tilbud
-                      </Button>
-                    </div>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <LeadOffers
+                          lead={lead}
+                          onCreateOffer={() => setShowCreateOffer(true)}
+                          showCreateOffer={showCreateOffer}
+                        />
+                      </CardContent>
+                    </Card>
                   )}
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Tilbud</CardTitle>
-                      <CardDescription>
-                        Tilbud sendt til {lead.name}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center py-6">
-                        <p className="text-muted-foreground">
-                          Ingen tilbud registrert
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
                 </div>
               </TabsContent>
 
               <TabsContent value="notes">
-                {/* Notes Tab Content */}
+                {/* Updated Notes Tab Content using LeadNotes component */}
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle>Notater</CardTitle>
-                    <Button size="sm" className="gap-1">
-                      <Plus className="h-4 w-4" /> Legg til notat
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    {lead.notes ? (
-                      <div className="whitespace-pre-wrap p-4 bg-slate-50 rounded-md">
-                        {lead.notes}
-                      </div>
-                    ) : (
-                      <div className="text-center py-6">
-                        <p className="text-muted-foreground">
-                          Ingen notater registrert
-                        </p>
-                      </div>
-                    )}
+                  <CardContent className="pt-6">
+                    <LeadNotes lead={lead} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -767,71 +801,8 @@ export default function LeadDetailPage() {
               {lead.orgNumber && (
                 <TabsContent value="proff">
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        Proff.no Informasjon
-                        <Badge variant="outline" className="ml-2">
-                          Ekstern
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Hent oppdatert informasjon fra Proff.no
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                          <Search className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            Søk etter {lead.name} på Proff.no:
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                          <Button variant="outline" asChild className="gap-2">
-                            <a
-                              href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Search className="h-4 w-4" /> Søk med org.nummer
-                            </a>
-                          </Button>
-
-                          <Button variant="outline" asChild className="gap-2">
-                            <a
-                              href={`https://proff.no/bransjesøk?q=${encodeURIComponent(
-                                lead.name
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Search className="h-4 w-4" /> Søk med navn
-                            </a>
-                          </Button>
-                        </div>
-
-                        <div className="mt-6 p-4 bg-slate-50 rounded-md">
-                          <h3 className="text-sm font-medium mb-2">
-                            Regnskapstall og nøkkelinformasjon
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            Proff.no inneholder oppdatert regnskapstall, roller
-                            og nøkkelinformasjon om norske bedrifter.
-                          </p>
-                          <Button variant="default" asChild>
-                            <a
-                              href={`https://proff.no/bransjesøk?q=${lead.orgNumber}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="gap-1"
-                            >
-                              <ExternalLink className="h-4 w-4" /> Åpne i
-                              Proff.no
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
+                    <CardContent className="pt-6">
+                      <LeadProffInfo lead={lead} />
                     </CardContent>
                   </Card>
                 </TabsContent>

@@ -57,7 +57,7 @@ const teamsData = {
 const crmItems = [
   {
     name: "Dashbord",
-    url: "/dashbord",
+    url: "/",
     icon: Home,
     group: "Hovedmoduler",
   },
@@ -67,54 +67,54 @@ const crmItems = [
     icon: Users,
     group: "Hovedmoduler",
   },
-  {
-    name: "Kontakter",
-    url: "/kontakter",
-    icon: Users,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Bedrifter",
-    url: "/bedrifter",
-    icon: Building2,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Muligheter",
-    url: "/muligheter",
-    icon: Briefcase,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Aktiviteter",
-    url: "/aktiviteter",
-    icon: CalendarClock,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Kommunikasjon",
-    url: "/kommunikasjon",
-    icon: MessageSquare,
-    group: "Verktøy",
-  },
-  {
-    name: "Oppgaver",
-    url: "/oppgaver",
-    icon: ClipboardList,
-    group: "Verktøy",
-  },
-  {
-    name: "Rapporter",
-    url: "/rapporter",
-    icon: BarChart3,
-    group: "Verktøy",
-  },
-  {
-    name: "Innstillinger",
-    url: "/innstillinger",
-    icon: Settings2,
-    group: "Verktøy",
-  },
+  // {
+  //   name: "Kontakter",
+  //   url: "/kontakter",
+  //   icon: Users,
+  //   group: "Hovedmoduler",
+  // },
+  // {
+  //   name: "Bedrifter",
+  //   url: "/bedrifter",
+  //   icon: Building2,
+  //   group: "Hovedmoduler",
+  // },
+  // {
+  //   name: "Muligheter",
+  //   url: "/muligheter",
+  //   icon: Briefcase,
+  //   group: "Hovedmoduler",
+  // },
+  // {
+  //   name: "Aktiviteter",
+  //   url: "/aktiviteter",
+  //   icon: CalendarClock,
+  //   group: "Hovedmoduler",
+  // },
+  // {
+  //   name: "Kommunikasjon",
+  //   url: "/kommunikasjon",
+  //   icon: MessageSquare,
+  //   group: "Verktøy",
+  // },
+  // {
+  //   name: "Oppgaver",
+  //   url: "/oppgaver",
+  //   icon: ClipboardList,
+  //   group: "Verktøy",
+  // },
+  // {
+  //   name: "Rapporter",
+  //   url: "/rapporter",
+  //   icon: BarChart3,
+  //   group: "Verktøy",
+  // },
+  // {
+  //   name: "Innstillinger",
+  //   url: "/innstillinger",
+  //   icon: Settings2,
+  //   group: "Verktøy",
+  // },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
