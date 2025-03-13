@@ -9,6 +9,9 @@
     "lint": "next lint",
     "prisma:seed": "npx tsx prisma/seed.ts"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^4.1.3",

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 // Import lead actions and types
-import { getLeadById, updateLeadStatus } from "../actions";
+import { getLeadById, updateLeadStatus } from "../../actions/leads/actions";
 import { Business, CustomerStage } from "@prisma/client";
 
 // Import custom components

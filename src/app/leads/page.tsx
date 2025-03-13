@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/lead/data-table";
 import { KanbanView } from "@/components/lead/kanban-view";
 import { Business, CustomerStage } from "@prisma/client";
-import { getLeads, updateLeadStatus } from "./actions";
+import { getLeads, updateLeadStatus } from "../actions/leads/actions";
 import { columns } from "@/components/lead/columns";
 
 export default function LeadsPage() {

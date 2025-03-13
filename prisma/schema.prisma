@@ -106,11 +106,13 @@ model Activity {
   updatedAt   DateTime     @updatedAt
 
   // Relations
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  contactId  String?
-  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  userId     String // We would typically have a User model
+  businessId       String?
+  business         Business?       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId        String?
+  contact          Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  jobApplicationId String?
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  userId           String // We would typically have a User model
 
   @@map("activities")
 }
@@ -172,4 +174,47 @@ model OfferItem {
   offer   Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
 
   @@map("offer_items")
+}
+
+// JobApplication model - For managing employment applications
+model JobApplication {
+  id              String               @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String
+  phone           String
+  address         String?
+  postalCode      String?
+  city            String?
+  country         String?
+  resume          String? // URL or path to the uploaded resume
+  coverLetter     String? // URL or path to the uploaded cover letter or content
+  experience      Int? // Years of experience
+  education       String?
+  skills          String[]
+  desiredPosition String?
+  currentEmployer String?
+  expectedSalary  Float?
+  startDate       DateTime?
+  notes           String?
+  source          String? // Where the application came from
+  applicationDate DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  status          JobApplicationStatus @default(new)
+
+  // Relations
+  activities Activity[]
+
+  @@map("job_applications")
+}
+
+enum JobApplicationStatus {
+  new
+  reviewing
+  interviewed
+  offer_extended
+  hired
+  rejected
+
+  @@map("job_application_status")
 }

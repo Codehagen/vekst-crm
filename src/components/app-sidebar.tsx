@@ -67,6 +67,12 @@ const crmItems = [
     icon: Users,
     group: "Hovedmoduler",
   },
+  {
+    name: "Jobbsøknader",
+    url: "/applications",
+    icon: Briefcase,
+    group: "Hovedmoduler",
+  },
   // {
   //   name: "Kontakter",
   //   url: "/kontakter",
