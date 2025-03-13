@@ -1,31 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { PageHeader } from "@/components/page-header";
 import { LayoutGrid, Table as TableIcon } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
-import { columns } from "./components/columns";
-import { DataTable } from "./components/data-table";
-import { KanbanView } from "./components/kanban-view";
+import { DataTable } from "@/components/lead/data-table";
+import { KanbanView } from "@/components/lead/kanban-view";
 import { Business, CustomerStage } from "@prisma/client";
 import { getLeads, updateLeadStatus } from "./actions";
+import { columns } from "@/components/lead/columns";
 
 export default function LeadsPage() {
   // Track which view is active
@@ -117,69 +103,55 @@ export default function LeadsPage() {
   };
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/">Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Leads</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
+    <>
+      <PageHeader
+        items={[
+          { label: "Dashboard", href: "/" },
+          { label: "Leads", isCurrentPage: true },
+        ]}
+      />
 
-        <main className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
-              <p className="text-muted-foreground mt-2">
-                Håndter potensielle kunder og salgsmuligheter
-              </p>
-            </div>
-            <Tabs
-              defaultValue="kanban"
-              value={view}
-              onValueChange={(value) => setView(value as "table" | "kanban")}
-            >
-              <TabsList className="grid w-[200px] grid-cols-2">
-                <TabsTrigger value="kanban" className="flex items-center gap-2">
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>Kanban</span>
-                </TabsTrigger>
-                <TabsTrigger value="table" className="flex items-center gap-2">
-                  <TableIcon className="h-4 w-4" />
-                  <span>Tabell</span>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+      <main className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
+            <p className="text-muted-foreground mt-2">
+              Håndter potensielle kunder og salgsmuligheter
+            </p>
           </div>
+          <Tabs
+            defaultValue="kanban"
+            value={view}
+            onValueChange={(value) => setView(value as "table" | "kanban")}
+          >
+            <TabsList className="grid w-[200px] grid-cols-2">
+              <TabsTrigger value="kanban" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                <span>Kanban</span>
+              </TabsTrigger>
+              <TabsTrigger value="table" className="flex items-center gap-2">
+                <TableIcon className="h-4 w-4" />
+                <span>Tabell</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <p className="text-muted-foreground">Laster leads...</p>
-            </div>
-          ) : view === "table" ? (
-            <DataTable
-              columns={columns}
-              data={leads}
-              searchColumn="name"
-              searchPlaceholder="Søk etter navn..."
-            />
-          ) : (
-            <KanbanView leads={leads} onStatusChange={handleStatusChange} />
-          )}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-muted-foreground">Laster leads...</p>
+          </div>
+        ) : view === "table" ? (
+          <DataTable
+            columns={columns}
+            data={leads}
+            searchColumn="name"
+            searchPlaceholder="Søk etter navn..."
+          />
+        ) : (
+          <KanbanView leads={leads} onStatusChange={handleStatusChange} />
+        )}
+      </main>
+    </>
   );
 }
