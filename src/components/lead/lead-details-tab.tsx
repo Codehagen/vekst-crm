@@ -1,7 +1,8 @@
 "use client";
 
-import { Business } from "@prisma/client";
+import { Business, CustomerStage } from "@prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LeadInfoCards } from "./lead-info-cards";
 import {
   User,
   Mail,
@@ -15,11 +16,31 @@ import {
 
 interface LeadDetailsTabProps {
   lead: Business;
+  statusProps?: {
+    label: string;
+    variant: "default" | "outline" | "secondary" | "destructive" | "success";
+    icon: React.ReactNode;
+    description: string;
+  };
+  onStatusDialogOpen?: () => void;
 }
 
-export function LeadDetailsTab({ lead }: LeadDetailsTabProps) {
+export function LeadDetailsTab({
+  lead,
+  statusProps,
+  onStatusDialogOpen,
+}: LeadDetailsTabProps) {
   return (
     <div className="space-y-6">
+      {/* Info Cards - Moved from main page */}
+      {statusProps && onStatusDialogOpen && (
+        <LeadInfoCards
+          lead={lead}
+          statusProps={statusProps}
+          onStatusDialogOpen={onStatusDialogOpen}
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Kontaktinformasjon</CardTitle>

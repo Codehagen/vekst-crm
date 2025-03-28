@@ -96,6 +96,9 @@ export default function LeadsPage() {
       lead: "Ny",
       prospect: "Kontaktet",
       qualified: "Kvalifisert",
+      offer_sent: "Tilbud sendt",
+      offer_accepted: "Tilbud akseptert",
+      declined: "Takket nei",
       customer: "Kunde",
       churned: "Tapt",
     };

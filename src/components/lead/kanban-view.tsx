@@ -10,7 +10,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, User, Phone, Mail, MoveRight } from "lucide-react";
+import {
+  MoreHorizontal,
+  User,
+  Phone,
+  Mail,
+  MoveRight,
+  Eye,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Business, CustomerStage } from "@prisma/client";
+import Link from "next/link";
 
 interface KanbanViewProps {
   leads: Business[];
@@ -30,74 +38,79 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ leads, onStatusChange }: KanbanViewProps) {
-  // Track which columns are currently being dragged over
-  const [activeDroppableId, setActiveDroppableId] = useState<string | null>(
-    null
-  );
-
-  const statusColumns: Record<
-    CustomerStage,
-    { title: string; description: string; variant: string }
-  > = {
-    lead: {
-      title: "Ny",
-      description: "Nye leads som ikke er kontaktet",
-      variant: "secondary",
+  // Define all status columns with appropriate titles and descriptions
+  const statusColumns: {
+    id: CustomerStage;
+    title: string;
+    description: string;
+  }[] = [
+    {
+      id: "lead",
+      title: "Nye leads",
+      description: "Leads som ikke er kontaktet",
     },
-    prospect: {
+    {
+      id: "prospect",
       title: "Kontaktet",
       description: "Leads som er i dialog",
-      variant: "default",
     },
-    qualified: {
+    {
+      id: "qualified",
       title: "Kvalifisert",
-      description: "Kvalifiserte leads klare for tilbud",
-      variant: "default",
+      description: "Leads klare for tilbud",
     },
-    customer: {
+    {
+      id: "offer_sent",
+      title: "Tilbud sendt",
+      description: "Venter på svar fra kunde",
+    },
+    {
+      id: "offer_accepted",
+      title: "Tilbud akseptert",
+      description: "Tilbud akseptert av kunde",
+    },
+    {
+      id: "declined",
+      title: "Takket nei",
+      description: "Kunde takket nei eller feil match",
+    },
+    {
+      id: "customer",
       title: "Kunde",
       description: "Konvertert til kunde",
-      variant: "success",
     },
-    churned: {
+    {
+      id: "churned",
       title: "Tapt",
       description: "Tapte leads",
-      variant: "destructive",
     },
-  };
+  ];
 
-  // Group leads by status (we only show lead, prospect, and qualified in the kanban)
-  const leadsByStatus = leads.reduce<Record<CustomerStage, Business[]>>(
-    (acc, lead) => {
-      // Only include these stages in the kanban view
-      if (["lead", "prospect", "qualified"].includes(lead.stage)) {
-        if (!acc[lead.stage]) {
-          acc[lead.stage] = [];
-        }
-        acc[lead.stage].push(lead);
-      }
+  // Group leads by status initially
+  const initialColumns = statusColumns.reduce<
+    Record<CustomerStage, Business[]>
+  >(
+    (acc, column) => {
+      acc[column.id] = leads.filter((lead) => lead.stage === column.id);
       return acc;
     },
-    { lead: [], prospect: [], qualified: [], customer: [], churned: [] }
+    {
+      lead: [],
+      prospect: [],
+      qualified: [],
+      offer_sent: [],
+      offer_accepted: [],
+      declined: [],
+      customer: [],
+      churned: [],
+    }
   );
 
-  // Handle drag start
-  const handleDragStart = useCallback(() => {
-    // Optional: Add some visual feedback when drag starts
-  }, []);
-
-  // Handle drag update - track which column we're hovering over
-  const handleDragUpdate = useCallback((update: any) => {
-    const { destination } = update;
-    setActiveDroppableId(destination?.droppableId || null);
-  }, []);
+  const [columns, setColumns] = useState(initialColumns);
 
   // Handle drag end
   const handleDragEnd = useCallback(
     (result: any) => {
-      // Clear the active droppable
-      setActiveDroppableId(null);
-
       const { source, destination, draggableId } = result;
 
       // Dropped outside the list
@@ -105,190 +118,176 @@ export function KanbanView({ leads, onStatusChange }: KanbanViewProps) {
         return;
       }
 
-      // Moved to a different status
-      if (source.droppableId !== destination.droppableId) {
-        // Call the onStatusChange handler if it exists
-        if (onStatusChange) {
-          // Optimistic update - immediately apply the change in the UI
-          // The actual server update will happen in the parent component
-          onStatusChange(draggableId, destination.droppableId as CustomerStage);
-        }
+      // If dropped in the same place
+      if (
+        destination.droppableId === source.droppableId &&
+        destination.index === source.index
+      ) {
+        return;
+      }
+
+      const sourceStatus = source.droppableId as CustomerStage;
+      const destinationStatus = destination.droppableId as CustomerStage;
+
+      // Find the lead that was dragged
+      const lead = leads.find((lead) => lead.id === draggableId);
+      if (!lead) return;
+
+      // Update local state optimistically
+      setColumns((prev) => {
+        const newColumns = { ...prev };
+        // Remove from source column
+        newColumns[sourceStatus] = newColumns[sourceStatus].filter(
+          (lead) => lead.id !== draggableId
+        );
+
+        // Add to destination column with updated status
+        const updatedLead = { ...lead, stage: destinationStatus };
+        newColumns[destinationStatus] = [
+          ...newColumns[destinationStatus].slice(0, destination.index),
+          updatedLead,
+          ...newColumns[destinationStatus].slice(destination.index),
+        ];
+
+        return newColumns;
+      });
+
+      // Call the onStatusChange handler if it exists
+      if (onStatusChange) {
+        onStatusChange(draggableId, destinationStatus);
       }
     },
-    [onStatusChange]
+    [leads, onStatusChange]
   );
 
-  // We only show these stages in the kanban
-  const kanbanStages: CustomerStage[] = ["lead", "prospect", "qualified"];
-
   return (
-    <DragDropContext
-      onDragStart={handleDragStart}
-      onDragUpdate={handleDragUpdate}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex space-x-4 overflow-x-auto pb-4">
-        {kanbanStages.map((stage) => (
-          <div key={stage} className="flex-shrink-0 w-96">
-            <div
-              className={cn(
-                "bg-muted rounded-t-md p-3 border-b transition-colors",
-                stage === activeDroppableId && "bg-accent"
-              )}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-medium">{statusColumns[stage].title}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {statusColumns[stage].description}
-                  </p>
-                </div>
-                <Badge
-                  variant={
-                    statusColumns[stage].variant as
-                      | "default"
-                      | "destructive"
-                      | "outline"
-                      | "secondary"
-                      | null
-                  }
-                >
-                  {leadsByStatus[stage]?.length || 0}
-                </Badge>
-              </div>
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <div className="flex overflow-x-auto pb-4 space-x-4 min-h-[550px]">
+        {statusColumns.map((column) => (
+          <div
+            key={column.id}
+            className="flex-shrink-0 w-80 flex flex-col h-full"
+          >
+            <div className="mb-2 sticky top-0">
+              <h3 className="text-sm font-medium">{column.title}</h3>
+              <p className="text-xs text-muted-foreground">
+                {column.description}
+              </p>
             </div>
 
-            <Droppable droppableId={stage}>
+            <Droppable droppableId={column.id}>
               {(provided, snapshot) => (
                 <div
-                  {...provided.droppableProps}
                   ref={provided.innerRef}
+                  {...provided.droppableProps}
                   className={cn(
-                    "bg-muted min-h-[600px] rounded-b-md p-2 transition-colors",
-                    snapshot.isDraggingOver && "bg-accent/50"
+                    "flex-1 min-h-[500px] rounded-lg border border-dashed p-2 bg-muted/40",
+                    snapshot.isDraggingOver && "bg-accent/20"
                   )}
                 >
-                  {leadsByStatus[stage]?.map((lead, index) => (
-                    <Draggable
-                      key={lead.id}
-                      draggableId={lead.id}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <Card
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className={cn(
-                            "mb-3 transition-shadow",
-                            snapshot.isDragging && "shadow-lg"
-                          )}
-                        >
-                          <CardHeader className="p-3 pb-0">
-                            <div className="flex justify-between items-start">
-                              <CardTitle className="text-sm font-medium">
-                                <a
-                                  href={`/leads/${encodeURIComponent(lead.id)}`}
-                                  className="hover:underline transition-colors hover:text-primary"
-                                >
+                  {columns[column.id].length === 0 ? (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-sm text-muted-foreground">
+                        Ingen leads
+                      </p>
+                    </div>
+                  ) : (
+                    columns[column.id].map((lead, index) => (
+                      <Draggable
+                        key={lead.id}
+                        draggableId={lead.id}
+                        index={index}
+                      >
+                        {(provided, snapshot) => (
+                          <Card
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                          >
+                            <CardHeader className="p-3 pb-0">
+                              <div className="flex justify-between items-start">
+                                <CardTitle className="text-sm font-medium truncate">
                                   {lead.name}
-                                </a>
-                              </CardTitle>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <span className="sr-only">Åpne meny</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuLabel>
-                                    Handlinger
-                                  </DropdownMenuLabel>
-                                  <DropdownMenuItem>
-                                    Vis detaljer
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem>
-                                    Rediger lead
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuLabel>
-                                    Endre status
-                                  </DropdownMenuLabel>
-                                  {kanbanStages.map(
-                                    (status) =>
-                                      status !== lead.stage && (
-                                        <DropdownMenuItem
-                                          key={status}
-                                          onClick={() => {
-                                            if (onStatusChange) {
-                                              onStatusChange(
-                                                lead.id,
-                                                status as CustomerStage
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          <div className="flex items-center">
-                                            {statusColumns[status].title}
-                                          </div>
-                                        </DropdownMenuItem>
-                                      )
+                                </CardTitle>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <span className="sr-only">Åpne meny</span>
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <Link href={`/leads/${lead.id}`}>
+                                      <DropdownMenuItem>
+                                        Vis detaljer
+                                      </DropdownMenuItem>
+                                    </Link>
+                                    <DropdownMenuItem>
+                                      Send e-post
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-3">
+                              <div className="grid grid-cols-1 gap-y-1 text-xs">
+                                <div className="flex items-center">
+                                  <User className="h-3 w-3 mr-1 text-muted-foreground" />
+                                  <span className="truncate">
+                                    {lead.contactPerson || lead.name}
+                                  </span>
+                                </div>
+
+                                {lead.email && (
+                                  <div className="flex items-center truncate">
+                                    <Mail className="h-3 w-3 mr-1 text-muted-foreground" />
+                                    <span className="truncate">
+                                      {lead.email}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {lead.phone && (
+                                  <div className="flex items-center">
+                                    <Phone className="h-3 w-3 mr-1 text-muted-foreground" />
+                                    <span>{lead.phone}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-border flex justify-between items-center text-xs text-muted-foreground">
+                                <div>
+                                  {new Date(lead.updatedAt).toLocaleDateString(
+                                    "no-NO"
                                   )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="p-3 pb-1">
-                            <div className="space-y-1">
-                              <div className="flex items-center text-sm">
-                                <User className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                                <span>{lead.contactPerson || lead.name}</span>
-                              </div>
-                              <div className="flex items-center text-sm">
-                                <Mail className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                                <a
-                                  href={`mailto:${lead.email}`}
-                                  className="hover:underline transition-colors hover:text-primary"
+                                </div>
+                                {lead.potensiellVerdi && (
+                                  <div className="font-medium">
+                                    {new Intl.NumberFormat("no-NO", {
+                                      style: "currency",
+                                      currency: "NOK",
+                                      maximumFractionDigits: 0,
+                                    }).format(lead.potensiellVerdi)}
+                                  </div>
+                                )}
+                                <Link
+                                  href={`/leads/${lead.id}`}
+                                  className="text-primary hover:underline"
                                 >
-                                  {lead.email}
-                                </a>
+                                  Vis
+                                </Link>
                               </div>
-                              <div className="flex items-center text-sm">
-                                <Phone className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                                <a
-                                  href={`tel:${lead.phone}`}
-                                  className="hover:underline transition-colors hover:text-primary"
-                                >
-                                  {lead.phone}
-                                </a>
-                              </div>
-                            </div>
-                          </CardContent>
-                          <CardFooter className="p-3 pt-0 flex justify-between">
-                            <div className="text-xs text-muted-foreground flex items-center">
-                              Oppdatert:{" "}
-                              {new Date(lead.updatedAt).toLocaleDateString(
-                                "no-NO"
-                              )}
-                            </div>
-                            {lead.potensiellVerdi && (
-                              <div className="text-sm font-medium">
-                                {new Intl.NumberFormat("no-NO", {
-                                  style: "currency",
-                                  currency: "NOK",
-                                  maximumFractionDigits: 0,
-                                }).format(lead.potensiellVerdi)}
-                              </div>
-                            )}
-                          </CardFooter>
-                        </Card>
-                      )}
-                    </Draggable>
-                  ))}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </Draggable>
+                    ))
+                  )}
                   {provided.placeholder}
                 </div>
               )}

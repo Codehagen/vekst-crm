@@ -15,15 +15,48 @@ import { LeadProffInfo } from "./lead-proff-info";
 import { LeadNotes } from "./lead-notes";
 import { LeadOffers } from "./lead-offers";
 import { CreateOffer } from "./create-offer";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import {
+  FileText,
+  Calendar,
+  ClipboardCheck,
+  FileEdit,
+  Building,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface LeadTabsProps {
   lead: Business;
+  statusProps?: {
+    label: string;
+    variant: "default" | "outline" | "secondary" | "destructive" | "success";
+    icon: React.ReactNode;
+    description: string;
+  };
+  onStatusDialogOpen?: () => void;
 }
 
-export function LeadTabs({ lead }: LeadTabsProps) {
+export function LeadTabs({
+  lead,
+  statusProps,
+  onStatusDialogOpen,
+}: LeadTabsProps) {
   const [showCreateOffer, setShowCreateOffer] = useState(false);
+  const [activeTab, setActiveTab] = useState("details");
+  const [isTabsSticky, setIsTabsSticky] = useState(false);
+
+  // Handle scroll to make tabs sticky
+  useEffect(() => {
+    const handleScroll = () => {
+      // Adjust these values based on your layout
+      const scrollThreshold = 200;
+      setIsTabsSticky(window.scrollY > scrollThreshold);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Handle offer creation
   const handleOfferSubmit = (offer: any) => {
@@ -33,31 +66,88 @@ export function LeadTabs({ lead }: LeadTabsProps) {
   };
 
   return (
-    <Tabs defaultValue="details" className="space-y-4">
-      <TabsList className="w-full md:w-auto">
-        <TabsTrigger value="details">Detaljer</TabsTrigger>
-        <TabsTrigger value="activities">Aktiviteter</TabsTrigger>
-        {/* <TabsTrigger value="offers">Tilbud</TabsTrigger>
-        <TabsTrigger value="notes">Notater</TabsTrigger> */}
-        {lead.orgNumber && <TabsTrigger value="proff">Proff Info</TabsTrigger>}
-      </TabsList>
+    <Tabs
+      defaultValue="details"
+      className="space-y-4"
+      value={activeTab}
+      onValueChange={setActiveTab}
+    >
+      <div
+        className={cn(
+          "transition-all duration-200 bg-white z-10 py-2",
+          isTabsSticky && "sticky top-0 shadow-sm border-b"
+        )}
+      >
+        <TabsList className="w-full md:w-auto bg-muted/60 p-1 backdrop-blur-sm">
+          <TabsTrigger
+            value="details"
+            className="flex items-center gap-2 data-[state=active]:bg-white"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline-block">Detaljer</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="activities"
+            className="flex items-center gap-2 data-[state=active]:bg-white"
+          >
+            <Calendar className="h-4 w-4" />
+            <span className="hidden sm:inline-block">Aktiviteter</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="offers"
+            className="flex items-center gap-2 data-[state=active]:bg-white"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            <span className="hidden sm:inline-block">Tilbud</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="notes"
+            className="flex items-center gap-2 data-[state=active]:bg-white"
+          >
+            <FileEdit className="h-4 w-4" />
+            <span className="hidden sm:inline-block">Notater</span>
+          </TabsTrigger>
+          {lead.orgNumber && (
+            <TabsTrigger
+              value="proff"
+              className="flex items-center gap-2 data-[state=active]:bg-white"
+            >
+              <Building className="h-4 w-4" />
+              <span className="hidden sm:inline-block">Proff Info</span>
+            </TabsTrigger>
+          )}
+        </TabsList>
+      </div>
 
-      <TabsContent value="details">
-        <LeadDetailsTab lead={lead} />
+      <TabsContent
+        value="details"
+        className="animate-in fade-in-50 duration-300"
+      >
+        <LeadDetailsTab
+          lead={lead}
+          statusProps={statusProps}
+          onStatusDialogOpen={onStatusDialogOpen}
+        />
       </TabsContent>
 
-      <TabsContent value="activities">
-        <Card>
-          <CardContent className="pt-6">
+      <TabsContent
+        value="activities"
+        className="animate-in fade-in-50 duration-300"
+      >
+        <Card className="shadow-sm">
+          <CardContent className="p-6">
             <LeadActivity lead={lead} />
           </CardContent>
         </Card>
       </TabsContent>
 
-      <TabsContent value="offers">
+      <TabsContent
+        value="offers"
+        className="animate-in fade-in-50 duration-300"
+      >
         <div className="space-y-4">
           {showCreateOffer ? (
-            <Card>
+            <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle>Opprett nytt tilbud</CardTitle>
                 <CardDescription>
@@ -74,8 +164,8 @@ export function LeadTabs({ lead }: LeadTabsProps) {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="pt-6">
+            <Card className="shadow-sm">
+              <CardContent className="p-6">
                 <LeadOffers
                   lead={lead}
                   onCreateOffer={() => setShowCreateOffer(true)}
@@ -87,18 +177,21 @@ export function LeadTabs({ lead }: LeadTabsProps) {
         </div>
       </TabsContent>
 
-      <TabsContent value="notes">
-        <Card>
-          <CardContent className="pt-6">
+      <TabsContent value="notes" className="animate-in fade-in-50 duration-300">
+        <Card className="shadow-sm">
+          <CardContent className="p-6">
             <LeadNotes lead={lead} />
           </CardContent>
         </Card>
       </TabsContent>
 
       {lead.orgNumber && (
-        <TabsContent value="proff">
-          <Card>
-            <CardContent className="pt-6">
+        <TabsContent
+          value="proff"
+          className="animate-in fade-in-50 duration-300"
+        >
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
               <LeadProffInfo lead={lead} />
             </CardContent>
           </Card>

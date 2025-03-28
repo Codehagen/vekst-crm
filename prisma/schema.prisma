@@ -58,6 +58,9 @@ enum CustomerStage {
   lead
   prospect
   qualified
+  offer_sent // Tilbud sendt
+  offer_accepted // Tilbud akseptert
+  declined // Kunde takket nei/feil match
   customer
   churned
 

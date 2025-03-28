@@ -29,6 +29,9 @@ function getStatusBadge(stage: CustomerStage) {
     lead: { label: "Ny", variant: "secondary" },
     prospect: { label: "Kontaktet", variant: "default" },
     qualified: { label: "Kvalifisert", variant: "default" },
+    offer_sent: { label: "Tilbud sendt", variant: "default" },
+    offer_accepted: { label: "Tilbud akseptert", variant: "success" },
+    declined: { label: "Takket nei", variant: "destructive" },
     customer: { label: "Kunde", variant: "success" },
     churned: { label: "Tapt", variant: "destructive" },
   };

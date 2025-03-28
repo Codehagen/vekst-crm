@@ -190,15 +190,12 @@ export default function LeadDetailPage() {
             onStatusChange={handleStageChange}
           />
 
-          {/* Quick Info Cards */}
-          <LeadInfoCards
+          {/* Main Content with Tabs - Moved up */}
+          <LeadTabs
             lead={lead}
             statusProps={statusProps}
             onStatusDialogOpen={() => setShowStageDialog(true)}
           />
-
-          {/* Main Content with Tabs */}
-          <LeadTabs lead={lead} />
         </div>
       </main>
     </>

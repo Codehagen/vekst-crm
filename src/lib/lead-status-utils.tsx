@@ -5,6 +5,9 @@ import {
   CheckCircle,
   ArrowUpCircle,
   AlertCircle,
+  Send,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import React from "react";
 
@@ -35,6 +38,24 @@ export function getStatusBadgeProps(stage: CustomerStage) {
       variant: "default",
       icon: <CheckCircle className="h-4 w-4" />,
       description: "Kvalifisert lead klar for tilbud",
+    },
+    offer_sent: {
+      label: "Tilbud sendt",
+      variant: "default",
+      icon: <Send className="h-4 w-4" />,
+      description: "Tilbud er sendt til kunden",
+    },
+    offer_accepted: {
+      label: "Tilbud akseptert",
+      variant: "success",
+      icon: <ThumbsUp className="h-4 w-4" />,
+      description: "Kunden har akseptert tilbudet",
+    },
+    declined: {
+      label: "Takket nei",
+      variant: "destructive",
+      icon: <ThumbsDown className="h-4 w-4" />,
+      description: "Kunden takket nei eller feil match",
     },
     customer: {
       label: "Kunde",
