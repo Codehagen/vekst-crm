@@ -1,4 +1,5 @@
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import { SVGProps } from "react";
 
 type IconProps = React.HTMLAttributes<SVGElement>;
 
@@ -142,3 +143,42 @@ export const Icons = {
     </svg>
   ),
 };
+
+export function GoogleCircleFilled(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M17.2 13.8c-.4.9-1.2 1.6-2.1 2-1 .4-2.1.5-3.1.2-1-.3-1.9-.9-2.6-1.8-.7-.9-1.1-2-1.1-3.1 0-1.2.5-2.3 1.2-3.2.7-.9 1.8-1.6 2.9-1.8 1.2-.2 2.4 0 3.4.6.7.5 1.3 1.2 1.7 2l-1.4.7-1.3.6c-.3-.7-1-1.3-1.8-1.4-1.1-.1-2.3.7-2.7 1.8-.4 1.1-.1 2.4.7 3.2.8.8 2.1 1 3.1.5.7-.3 1.2-1 1.4-1.8h-2.9v-2.1h5.5c.2.9 0 1.8-.5 2.6Z" />
+    </svg>
+  );
+}
+
+export function Facebook(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  );
+}
