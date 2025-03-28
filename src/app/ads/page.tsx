@@ -34,11 +34,23 @@ export default async function Ads() {
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <PlatformTabs />
-          <DateRangePicker
-            defaultStartDate={startDate}
-            defaultEndDate={endDate}
-          />
+          <Suspense
+            fallback={
+              <div className="h-10 w-40 animate-pulse rounded-md bg-muted"></div>
+            }
+          >
+            <PlatformTabs />
+          </Suspense>
+          <Suspense
+            fallback={
+              <div className="h-10 w-[300px] animate-pulse rounded-md bg-muted"></div>
+            }
+          >
+            <DateRangePicker
+              defaultStartDate={startDate}
+              defaultEndDate={endDate}
+            />
+          </Suspense>
         </div>
 
         <Suspense fallback={<AdsPageSkeleton />}>
