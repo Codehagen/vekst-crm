@@ -1,8 +1,12 @@
+import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
-import { TicketList } from "@/components/ticket/ticket-list";
-import { TicketStatusFilter } from "@/components/ticket/ticket-status-filter";
+import { TicketDataTable } from "@/components/ticket/ticket-data-table";
+import { getTickets } from "@/lib/actions/ticket-actions";
 
-export default function TicketsPage() {
+export default async function TicketsPage() {
+  // Get real ticket data from the database
+  const tickets = await getTickets();
+
   return (
     <>
       <PageHeader
@@ -14,12 +18,14 @@ export default function TicketsPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Support Tickets</h1>
-          <div className="flex items-center gap-2">
-            <TicketStatusFilter />
-          </div>
+          <p className="text-muted-foreground">
+            Manage support tickets and customer requests
+          </p>
         </div>
 
-        <TicketList />
+        <Suspense fallback={<div>Loading ticket data...</div>}>
+          <TicketDataTable data={tickets} />
+        </Suspense>
       </div>
     </>
   );
