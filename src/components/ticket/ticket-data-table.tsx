@@ -193,12 +193,20 @@ const columns: ColumnDef<Ticket>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    cell: ({ row }) => (
+      <div className="w-32">
+        <StatusBadge status={row.original.status} />
+      </div>
+    ),
   },
   {
     accessorKey: "priority",
     header: "Priority",
-    cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+    cell: ({ row }) => (
+      <div className="w-32">
+        <PriorityBadge priority={row.original.priority} />
+      </div>
+    ),
   },
   {
     accessorKey: "businessName",
@@ -685,11 +693,15 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="font-medium">Status</div>
-                <StatusBadge status={ticket.status} />
+                <div className="w-32">
+                  <StatusBadge status={ticket.status} />
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="font-medium">Priority</div>
-                <PriorityBadge priority={ticket.priority} />
+                <div className="w-32">
+                  <PriorityBadge priority={ticket.priority} />
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="font-medium">Business</div>
@@ -776,11 +788,15 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-2">
                 <div className="font-medium">Status</div>
-                <StatusBadge status={ticket.status} />
+                <div className="w-32">
+                  <StatusBadge status={ticket.status} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="font-medium">Priority</div>
-                <PriorityBadge priority={ticket.priority} />
+                <div className="w-32">
+                  <PriorityBadge priority={ticket.priority} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="font-medium">Business</div>

@@ -2,20 +2,23 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
-  Users,
-  Building2,
-  BarChart3,
-  CalendarClock,
-  MessageSquare,
-  Home,
-  Settings2,
-  ClipboardList,
-  Briefcase,
-  GalleryVerticalEnd,
-  AudioWaveform,
-  Command,
-} from "lucide-react";
+  IconUsers,
+  IconBuilding,
+  IconChartBar,
+  IconCalendarTime,
+  IconMessageCircle,
+  IconHome,
+  IconSettings,
+  IconClipboardList,
+  IconBriefcase,
+  IconLayoutGridAdd,
+  IconWaveSine,
+  IconCommand,
+  type Icon,
+  IconInnerShadowTop,
+} from "@tabler/icons-react";
 
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
@@ -25,11 +28,11 @@ import {
   SidebarRail,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 // Sample data for teams
@@ -37,17 +40,17 @@ const teamsData = {
   teams: [
     {
       name: "Vekstloop",
-      logo: GalleryVerticalEnd,
+      logo: IconLayoutGridAdd,
       plan: "Enterprise",
     },
     {
       name: "Acme Corp.",
-      logo: AudioWaveform,
+      logo: IconWaveSine,
       plan: "Startup",
     },
     {
       name: "Evil Corp.",
-      logo: Command,
+      logo: IconCommand,
       plan: "Free",
     },
   ],
@@ -58,80 +61,80 @@ const crmItems = [
   {
     name: "Dashbord",
     url: "/",
-    icon: Home,
+    icon: IconHome,
     group: "Hovedmoduler",
   },
   {
     name: "Leads",
     url: "/leads",
-    icon: Users,
+    icon: IconUsers,
     group: "Hovedmoduler",
   },
   {
     name: "Annonser",
     url: "/ads",
-    icon: GalleryVerticalEnd,
+    icon: IconLayoutGridAdd,
     group: "Hovedmoduler",
   },
   {
     name: "Jobbsøknader",
     url: "/applications",
-    icon: Briefcase,
+    icon: IconBriefcase,
     group: "Hovedmoduler",
   },
   {
     name: "Tickets",
     url: "/tickets",
-    icon: ClipboardList,
+    icon: IconClipboardList,
     group: "Hovedmoduler",
   },
 
   // {
   //   name: "Kontakter",
   //   url: "/kontakter",
-  //   icon: Users,
+  //   icon: IconUsers,
   //   group: "Hovedmoduler",
   // },
   // {
   //   name: "Bedrifter",
   //   url: "/bedrifter",
-  //   icon: Building2,
+  //   icon: IconBuilding,
   //   group: "Hovedmoduler",
   // },
   // {
   //   name: "Muligheter",
   //   url: "/muligheter",
-  //   icon: Briefcase,
+  //   icon: IconBriefcase,
   //   group: "Hovedmoduler",
   // },
   // {
   //   name: "Aktiviteter",
   //   url: "/aktiviteter",
-  //   icon: CalendarClock,
+  //   icon: IconCalendarTime,
   //   group: "Hovedmoduler",
   // },
   // {
   //   name: "Kommunikasjon",
   //   url: "/kommunikasjon",
-  //   icon: MessageSquare,
+  //   icon: IconMessageCircle,
   //   group: "Verktøy",
   // },
   // {
   //   name: "Oppgaver",
   //   url: "/oppgaver",
-  //   icon: ClipboardList,
+  //   icon: IconClipboardList,
   //   group: "Verktøy",
   // },
   // {
   //   name: "Rapporter",
   //   url: "/rapporter",
-  //   icon: BarChart3,
+  //   icon: IconChartBar,
   //   group: "Verktøy",
   // },
   // {
   //   name: "Innstillinger",
   //   url: "/innstillinger",
-  //   icon: Settings2,
+  //   icon: IconSettings,
   //   group: "Verktøy",
   // },
 ];
@@ -166,7 +169,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={teamsData.teams} />
+        <SidebarMenuButton
+          asChild
+          className="data-[slot=sidebar-menu-button]:!p-1.5"
+        >
+          <a href="/">
+            <IconInnerShadowTop className="!size-5" />
+            <span className="text-base font-semibold">Sailsdock</span>
+          </a>
+        </SidebarMenuButton>
       </SidebarHeader>
       <SidebarContent>
         {Object.entries(groupedItems).map(([groupName, items]) => (
@@ -175,23 +186,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             className="group-data-[collapsible=icon]:hidden"
           >
             <SidebarGroupLabel>{groupName}</SidebarGroupLabel>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.name}>
-                  <SidebarMenuButton
-                    asChild
-                    className={cn(
-                      isActive(item.url) && "bg-accent text-accent-foreground"
-                    )}
-                  >
-                    <Link href={item.url}>
-                      <item.icon />
-                      <span>{item.name}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            <SidebarGroupContent className="flex flex-col gap-2">
+              <SidebarMenu>
+                {items.map((item) => (
+                  <SidebarMenuItem key={item.name}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.name}
+                      className={cn(
+                        isActive(item.url) && "bg-accent text-accent-foreground"
+                      )}
+                    >
+                      <Link href={item.url}>
+                        <item.icon />
+                        <span>{item.name}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>

@@ -35,7 +35,10 @@ export function PriorityBadge({ priority }: PriorityBadgeProps) {
   };
 
   return (
-    <Badge variant="outline" className={config.className}>
+    <Badge
+      variant="outline"
+      className={`text-muted-foreground px-1.5 ${config.className}`}
+    >
       {config.label}
     </Badge>
   );
