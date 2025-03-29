@@ -45,6 +45,7 @@ model Business {
   activities Activity[]
   offers     Offer[]
   tags       Tag[]      @relation("BusinessToTag")
+  Ticket     Ticket[]
 
   @@map("businesses")
 }
@@ -72,6 +73,7 @@ model Tag {
   id         String     @id @default(cuid())
   name       String     @unique
   businesses Business[] @relation("BusinessToTag")
+  tickets    Ticket[]   @relation("TicketToTag")
 
   @@map("tags")
 }
@@ -93,6 +95,7 @@ model Contact {
   business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
   activities Activity[]
   offers     Offer[]
+  Ticket     Ticket[]
 
   @@map("contacts")
 }
@@ -116,6 +119,8 @@ model Activity {
   jobApplicationId String?
   jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
   userId           String // We would typically have a User model
+  Ticket           Ticket?         @relation(fields: [ticketId], references: [id])
+  ticketId         String?
 
   @@map("activities")
 }
@@ -220,4 +225,73 @@ enum JobApplicationStatus {
   rejected
 
   @@map("job_application_status")
+}
+
+// Ticket system models
+model Ticket {
+  id          String       @id @default(cuid())
+  title       String
+  description String
+  status      TicketStatus @default(unassigned)
+  priority    Priority     @default(medium)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  dueDate     DateTime?
+  resolvedAt  DateTime?
+
+  // Submission metadata
+  submitterName        String?
+  submitterEmail       String?
+  submittedCompanyName String?
+
+  // Relations
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assigneeId String? // ID of user assigned to ticket
+  creatorId  String? // ID of user who created ticket
+
+  // Child relations
+  comments   TicketComment[]
+  activities Activity[]
+  tags       Tag[]           @relation("TicketToTag")
+
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isInternal Boolean  @default(false)
+
+  // Relations
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId String // ID of user who wrote comment
+
+  @@map("ticket_comments")
+}
+
+enum TicketStatus {
+  unassigned // Newly received, pending business assignment
+  open // Assigned to business but not being worked on
+  in_progress // Being actively worked on
+  waiting_on_customer
+  waiting_on_third_party
+  resolved
+  closed
+
+  @@map("ticket_status")
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+
+  @@map("priority")
 }

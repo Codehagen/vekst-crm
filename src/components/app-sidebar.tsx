@@ -79,6 +79,12 @@ const crmItems = [
     icon: Briefcase,
     group: "Hovedmoduler",
   },
+  {
+    name: "Tickets",
+    url: "/tickets",
+    icon: ClipboardList,
+    group: "Hovedmoduler",
+  },
 
   // {
   //   name: "Kontakter",

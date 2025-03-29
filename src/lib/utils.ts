@@ -99,14 +99,18 @@ export function formatCompactNumber(num: number): string {
 }
 
 /**
- * Formats a number as currency (USD)
+ * Formats a number as currency with consistent server/client rendering
  */
-export function formatCurrency(num: number): string {
+export function formatCurrency(amount: number, currency = "NOK"): string {
+  // Use a fixed locale and formatting that works on both server and client
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(num);
+    currency,
+    currencyDisplay: "code", // Use currency code for consistent rendering
+  })
+    .format(amount)
+    .replace(currency, currency + " ") // Adjust spacing consistently
+    .trim();
 }
 
 // Tremor focusRing [v0.0.1]
@@ -117,3 +121,24 @@ export const focusRing = [
   // outline color
   "outline-blue-500 dark:outline-blue-500",
 ];
+
+export function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + "...";
+}
+
+export function generateAvatarFallback(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+export function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+}

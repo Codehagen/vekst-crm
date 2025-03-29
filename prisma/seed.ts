@@ -5,6 +5,8 @@ import {
   ActivityType,
   OfferStatus,
   JobApplicationStatus,
+  TicketStatus,
+  Priority,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -13,6 +15,8 @@ async function main() {
   console.log("Start seeding the database...");
 
   // Clear existing data
+  await prisma.ticketComment.deleteMany();
+  await prisma.ticket.deleteMany();
   await prisma.offerItem.deleteMany();
   await prisma.offer.deleteMany();
   await prisma.activity.deleteMany();
@@ -491,6 +495,190 @@ async function main() {
   console.log(
     `Created ${jobApplicationActivities.length} job application activities`
   );
+
+  // Create support tags
+  const supportTags = await Promise.all([
+    prisma.tag.create({
+      data: { name: "invoicing" },
+    }),
+    prisma.tag.create({
+      data: { name: "technical" },
+    }),
+    prisma.tag.create({
+      data: { name: "account" },
+    }),
+    prisma.tag.create({
+      data: { name: "urgent" },
+    }),
+  ]);
+
+  console.log(`Created ${supportTags.length} support tags`);
+
+  // Create tickets for existing businesses
+  const tickets = await Promise.all([
+    // Ticket for Norsk Teknologi (with business and contact)
+    prisma.ticket.create({
+      data: {
+        title: "Problem with invoicing module",
+        description:
+          "We're having issues generating invoices for the last month. The system shows an error when trying to create new invoices.",
+        status: TicketStatus.in_progress,
+        priority: Priority.high,
+        businessId: norskTeknologi.id,
+        contactId: contacts[0].id,
+        assigneeId: "u001", // This would be a real user ID in a production system
+        creatorId: "u002",
+        tags: {
+          connect: [{ name: "invoicing" }, { name: "technical" }],
+        },
+        comments: {
+          create: [
+            {
+              content:
+                "I've started looking into this issue. It appears to be related to the tax calculation module.",
+              authorId: "u001",
+              isInternal: true,
+            },
+            {
+              content:
+                "Thank you for looking into this. Please let us know when you have more information.",
+              authorId: contacts[0].id,
+              isInternal: false,
+            },
+          ],
+        },
+      },
+    }),
+    // Another ticket for Norsk Teknologi
+    prisma.ticket.create({
+      data: {
+        title: "Request for additional user accounts",
+        description:
+          "We need to add three new team members to our account. Can you please provide access for them?",
+        status: TicketStatus.open,
+        priority: Priority.medium,
+        businessId: norskTeknologi.id,
+        contactId: contacts[1].id,
+        assigneeId: "u003",
+        creatorId: "u003",
+        tags: {
+          connect: [{ name: "account" }],
+        },
+      },
+    }),
+    // Ticket for Hansen Konsult
+    prisma.ticket.create({
+      data: {
+        title: "Data migration assistance",
+        description:
+          "We need help migrating our data from our old system. Can you provide guidance on the process?",
+        status: TicketStatus.waiting_on_customer,
+        priority: Priority.medium,
+        businessId: hansenKonsult.id,
+        assigneeId: "u001",
+        creatorId: "u001",
+        comments: {
+          create: [
+            {
+              content:
+                "I've sent you the data migration template. Please fill it out and send it back to us.",
+              authorId: "u001",
+              isInternal: false,
+            },
+          ],
+        },
+      },
+    }),
+    // Unassigned ticket (no business yet)
+    prisma.ticket.create({
+      data: {
+        title: "Integration with external API",
+        description:
+          "We need assistance integrating your system with our e-commerce platform API. Please advise on the next steps.",
+        status: TicketStatus.unassigned,
+        priority: Priority.low,
+        submitterName: "Jon Hansen",
+        submitterEmail: "jon.hansen@example.com",
+        submittedCompanyName: "E-Commerce Solutions AS",
+        creatorId: "system",
+        tags: {
+          connect: [{ name: "technical" }],
+        },
+      },
+    }),
+    // Urgent ticket
+    prisma.ticket.create({
+      data: {
+        title: "System downtime - Cannot access dashboard",
+        description:
+          "We're experiencing a complete system outage. Our team cannot access any dashboards or reports. This is critical for our operations.",
+        status: TicketStatus.in_progress,
+        priority: Priority.urgent,
+        businessId: johansenOgSonner.id,
+        creatorId: "u002",
+        assigneeId: "u001",
+        tags: {
+          connect: [{ name: "technical" }, { name: "urgent" }],
+        },
+        comments: {
+          create: [
+            {
+              content:
+                "We're investigating the issue. Initial findings suggest a database connection problem.",
+              authorId: "u001",
+              isInternal: true,
+            },
+            {
+              content:
+                "This is becoming critical for our business operations. Any update on the timeline?",
+              authorId: "customer",
+              isInternal: false,
+            },
+            {
+              content:
+                "We've identified the issue and are implementing a fix. Should be resolved within 30 minutes.",
+              authorId: "u001",
+              isInternal: false,
+            },
+          ],
+        },
+      },
+    }),
+    // Resolved ticket
+    prisma.ticket.create({
+      data: {
+        title: "Cannot reset password",
+        description:
+          "I've tried to reset my password multiple times but I'm not receiving the reset email.",
+        status: TicketStatus.resolved,
+        priority: Priority.medium,
+        resolvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+        businessId: leads[0].id,
+        submitterName: "Ola Nordmann",
+        submitterEmail: "ola@example.no",
+        creatorId: "system",
+        assigneeId: "u002",
+        comments: {
+          create: [
+            {
+              content:
+                "I've checked our email logs and it looks like the emails were being blocked by your spam filter. I've manually reset your password to a temporary one and sent it in a separate email.",
+              authorId: "u002",
+              isInternal: false,
+            },
+            {
+              content:
+                "Thank you! I received the email and was able to set a new password.",
+              authorId: "customer",
+              isInternal: false,
+            },
+          ],
+        },
+      },
+    }),
+  ]);
+
+  console.log(`Created ${tickets.length} tickets`);
 
   console.log("Database seeding completed");
 }
