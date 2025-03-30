@@ -28,7 +28,10 @@ import {
   IconChevronsRight,
   IconDotsVertical,
   IconGripVertical,
+  IconLayoutColumns,
   IconPlus,
+  IconCircleCheckFilled,
+  IconLoader,
 } from "@tabler/icons-react";
 import {
   ColumnDef,
@@ -195,7 +198,17 @@ const columns: ColumnDef<Ticket>[] = [
     header: "Status",
     cell: ({ row }) => (
       <div className="w-32">
-        <StatusBadge status={row.original.status} />
+        <Badge variant="outline" className="text-muted-foreground px-1.5">
+          {row.original.status === "resolved" ||
+          row.original.status === "closed" ? (
+            <IconCircleCheckFilled className="mr-1 fill-green-500 dark:fill-green-400 size-4" />
+          ) : (
+            <IconLoader className="mr-1 size-4" />
+          )}
+          <span className="capitalize">
+            {row.original.status.replace(/_/g, " ")}
+          </span>
+        </Badge>
       </div>
     ),
   },
@@ -204,7 +217,9 @@ const columns: ColumnDef<Ticket>[] = [
     header: "Priority",
     cell: ({ row }) => (
       <div className="w-32">
-        <PriorityBadge priority={row.original.priority} />
+        <Badge variant="outline" className="text-muted-foreground px-1.5">
+          <span className="capitalize">{row.original.priority}</span>
+        </Badge>
       </div>
     ),
   },
@@ -388,6 +403,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     pageIndex: 0,
     pageSize: 10,
   });
+  const [activeTab, setActiveTab] = React.useState("all");
   const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -436,62 +452,85 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     }
   }
 
-  // Filter options based on ticket statuses
-  const statusOptions = [
-    { value: "all", label: "All Tickets" },
-    { value: "unassigned", label: "Unassigned" },
-    { value: "open", label: "Open" },
-    { value: "in_progress", label: "In Progress" },
-    { value: "waiting_on_customer", label: "Waiting on Customer" },
-    { value: "waiting_on_third_party", label: "Waiting on Third Party" },
-    { value: "resolved", label: "Resolved" },
-    { value: "closed", label: "Closed" },
-  ];
+  // Calculate ticket counts by status
+  const statusCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {
+      all: initialData.length,
+      open: 0,
+      in_progress: 0,
+      waiting_on_customer: 0,
+      waiting_on_third_party: 0,
+      resolved: 0,
+      closed: 0,
+    };
 
-  const [activeFilter, setActiveFilter] = React.useState("all");
+    initialData.forEach((ticket) => {
+      if (counts[ticket.status] !== undefined) {
+        counts[ticket.status]++;
+      }
+    });
 
-  // Handle filter change
-  const handleFilterChange = (value: string) => {
-    setActiveFilter(value);
+    return counts;
+  }, [initialData]);
 
-    if (value === "all") {
-      table.getColumn("status")?.setFilterValue(undefined);
+  // Filter data based on selected tab
+  React.useEffect(() => {
+    if (activeTab === "all") {
+      setData(initialData);
     } else {
-      table.getColumn("status")?.setFilterValue(value);
+      setData(initialData.filter((ticket) => ticket.status === activeTab));
     }
+    // Reset pagination when switching tabs
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [activeTab, initialData]);
+
+  // Handle tab change
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    // Clear any filters when changing tabs
+    table.resetColumnFilters();
   };
 
   return (
-    <div className="w-full flex-col justify-start gap-6">
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-4">
-          <Input
-            placeholder="Search tickets..."
-            className="max-w-sm"
-            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-            onChange={(e) =>
-              table.getColumn("title")?.setFilterValue(e.target.value)
-            }
-          />
-          <Select value={activeFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <Tabs
+      defaultValue="all"
+      value={activeTab}
+      onValueChange={handleTabChange}
+      className="w-full flex-col justify-start gap-6"
+    >
+      <div className="flex items-center justify-between px-4 lg:px-6">
+        <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
+          <TabsTrigger value="all">
+            All Tickets <Badge variant="secondary">{statusCounts.all}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="open">
+            Open <Badge variant="secondary">{statusCounts.open}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="in_progress">
+            In Progress{" "}
+            <Badge variant="secondary">{statusCounts.in_progress}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="waiting_on_customer">
+            Waiting on Customer{" "}
+            <Badge variant="secondary">
+              {statusCounts.waiting_on_customer}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="resolved">
+            Resolved <Badge variant="secondary">{statusCounts.resolved}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="closed">
+            Closed <Badge variant="secondary">{statusCounts.closed}</Badge>
+          </TabsTrigger>
+        </TabsList>
 
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                Columns
+                <IconLayoutColumns className="mr-2 h-4 w-4" />
+                <span className="hidden lg:inline">Customize Columns</span>
+                <span className="lg:hidden">Columns</span>
                 <IconChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -519,14 +558,25 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button>
+          <Button variant="outline" size="sm">
             <IconPlus className="mr-2 h-4 w-4" />
-            New Ticket
+            <span className="hidden lg:inline">Add Ticket</span>
           </Button>
         </div>
       </div>
 
-      <div className="relative flex flex-col gap-4 overflow-auto px-4">
+      {/* Main content area */}
+      <div className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+        <div className="flex items-center gap-4 mb-4">
+          <Input
+            placeholder="Search tickets..."
+            className="max-w-sm"
+            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+            onChange={(e) =>
+              table.getColumn("title")?.setFilterValue(e.target.value)
+            }
+          />
+        </div>
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
@@ -594,7 +644,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                   table.setPageSize(Number(value));
                 }}
               >
-                <SelectTrigger className="w-20" id="rows-per-page">
+                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
                   <SelectValue
                     placeholder={table.getState().pagination.pageSize}
                   />
@@ -616,6 +666,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
               <Button
                 variant="outline"
                 className="hidden h-8 w-8 p-0 lg:flex"
+                size="icon"
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
@@ -656,7 +707,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
           </div>
         </div>
       </div>
-    </div>
+    </Tabs>
   );
 }
 
@@ -670,156 +721,112 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
     setComment(""); // Clear the comment field after submission
   };
 
-  // Use drawer on mobile, dialog on desktop
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerTrigger asChild>
-          <Button
-            variant="link"
-            className="text-foreground w-fit px-0 text-left"
-          >
-            {ticket.title}
-          </Button>
-        </DrawerTrigger>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>{ticket.title}</DrawerTitle>
-            <DrawerDescription>
-              Created on {format(ticket.createdAt, "PPP")}
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Status</div>
-                <div className="w-32">
-                  <StatusBadge status={ticket.status} />
-                </div>
+  return (
+    <Drawer
+      direction={isMobile ? "bottom" : "right"}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DrawerTrigger asChild>
+        <Button variant="link" className="text-foreground w-fit px-0 text-left">
+          {ticket.title}
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader className="gap-1">
+          <DrawerTitle>{ticket.title}</DrawerTitle>
+          <DrawerDescription>
+            Created on {format(ticket.createdAt, "PPP")}
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+          <div className="grid gap-2">
+            <div className="flex gap-2 leading-none font-medium">
+              Ticket Details
+            </div>
+          </div>
+          <Separator />
+          <form className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="status">Status</Label>
+                <Select defaultValue={ticket.status}>
+                  <SelectTrigger id="status" className="w-full">
+                    <SelectValue placeholder="Select a status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="waiting_on_customer">
+                      Waiting on Customer
+                    </SelectItem>
+                    <SelectItem value="waiting_on_third_party">
+                      Waiting on Third Party
+                    </SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Priority</div>
-                <div className="w-32">
-                  <PriorityBadge priority={ticket.priority} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Business</div>
-                <div>{ticket.businessName || "Unassigned"}</div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Contact</div>
-                <div>{ticket.contactName || "N/A"}</div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Assignee</div>
-                <div>{ticket.assignee || "Unassigned"}</div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Due Date</div>
-                <div>
-                  {ticket.dueDate
-                    ? format(ticket.dueDate, "PPP")
-                    : "No date set"}
-                </div>
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="priority">Priority</Label>
+                <Select defaultValue={ticket.priority}>
+                  <SelectTrigger id="priority" className="w-full">
+                    <SelectValue placeholder="Select a priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <Separator />
-            <div className="flex flex-col gap-2">
-              <div className="font-medium">Description</div>
-              <div className="text-sm text-muted-foreground">
-                {ticket.description}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="business">Business</Label>
+                <Input
+                  id="business"
+                  defaultValue={ticket.businessName || ""}
+                  placeholder="Assign to business"
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="assignee">Assignee</Label>
+                <Select defaultValue={ticket.assignee || ""}>
+                  <SelectTrigger id="assignee" className="w-full">
+                    <SelectValue placeholder="Assign ticket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user123">John Doe</SelectItem>
+                    <SelectItem value="user456">Jane Smith</SelectItem>
+                    <SelectItem value="user789">Alex Johnson</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <Separator />
-            <div className="flex flex-col gap-2">
-              <div className="font-medium">Tags</div>
-              <div className="flex flex-wrap gap-2">
-                {ticket.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <Separator />
-            <div className="flex flex-col gap-2">
-              <div className="font-medium">Add a comment</div>
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="description">Description</Label>
               <Textarea
+                id="description"
+                defaultValue={ticket.description}
+                className="min-h-[120px]"
+              />
+            </div>
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="comment">Add a comment</Label>
+              <Textarea
+                id="comment"
                 placeholder="Type your comment here..."
                 className="min-h-[100px]"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
               />
-              <Button className="w-full" onClick={handleSubmitComment}>
-                Submit Comment
-              </Button>
             </div>
-          </div>
-          <DrawerFooter>
-            <DrawerClose asChild>
-              <Button variant="outline">Close</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  // Desktop dialog
-  return (
-    <>
-      <Button
-        variant="link"
-        className="text-foreground w-fit px-0 text-left"
-        onClick={() => setOpen(true)}
-      >
-        {ticket.title}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{ticket.title}</DialogTitle>
-            <DialogDescription>
-              Created on {format(ticket.createdAt, "PPP")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Status</div>
-                <div className="w-32">
-                  <StatusBadge status={ticket.status} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Priority</div>
-                <div className="w-32">
-                  <PriorityBadge priority={ticket.priority} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Business</div>
-                <div>{ticket.businessName || "Unassigned"}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Contact</div>
-                <div>{ticket.contactName || "N/A"}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Assignee</div>
-                <div>{ticket.assignee || "Unassigned"}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">Due Date</div>
-                <div>
-                  {ticket.dueDate
-                    ? format(ticket.dueDate, "PPP")
-                    : "No date set"}
-                </div>
-              </div>
-              <div className="col-span-2 flex flex-col gap-2">
-                <div className="font-medium">Tags</div>
+            {ticket.tags.length > 0 && (
+              <div className="flex flex-col gap-3">
+                <Label>Tags</Label>
                 <div className="flex flex-wrap gap-2">
                   {ticket.tags.map((tag) => (
                     <Badge key={tag} variant="secondary">
@@ -828,29 +835,16 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
                   ))}
                 </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <div className="font-medium">Description</div>
-                <div className="text-sm text-muted-foreground">
-                  {ticket.description}
-                </div>
-              </div>
-              <Separator />
-              <div className="flex flex-col gap-2">
-                <div className="font-medium">Add a comment</div>
-                <Textarea
-                  placeholder="Type your comment here..."
-                  className="min-h-[100px]"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                />
-                <Button onClick={handleSubmitComment}>Submit Comment</Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+            )}
+          </form>
+        </div>
+        <DrawerFooter>
+          <Button onClick={handleSubmitComment}>Submit Comment</Button>
+          <DrawerClose asChild>
+            <Button variant="outline">Close</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
