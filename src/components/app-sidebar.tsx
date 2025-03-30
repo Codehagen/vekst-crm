@@ -18,6 +18,7 @@ import {
   IconCommand,
   type Icon,
   IconInnerShadowTop,
+  IconMail,
 } from "@tabler/icons-react";
 
 import { TeamSwitcher } from "@/components/team-switcher";
@@ -60,7 +61,7 @@ const teamsData = {
 const crmItems = [
   {
     name: "Dashbord",
-    url: "/",
+    url: "/dashboard",
     icon: IconHome,
     group: "Hovedmoduler",
   },
@@ -86,6 +87,12 @@ const crmItems = [
     name: "Tickets",
     url: "/tickets",
     icon: IconClipboardList,
+    group: "Hovedmoduler",
+  },
+  {
+    name: "Email",
+    url: "/dashboard/email",
+    icon: IconMail,
     group: "Hovedmoduler",
   },
 

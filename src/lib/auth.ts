@@ -34,18 +34,26 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-      // Add scopes for email sending permission from email-provider-integration.md
-      scopes: ["openid", "email", "profile", "https://mail.google.com/"],
-    },
-    microsoft: {
-      clientId: process.env.MICROSOFT_CLIENT_ID as string,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string,
-      // Add scopes for email sending permission from email-provider-integration.md
+      // Update scopes to match what's configured in Google Cloud Console
       scopes: [
         "openid",
         "email",
         "profile",
-        "https://outlook.office.com/Mail.Send",
+        "https://www.googleapis.com/auth/gmail.modify",
+      ],
+    },
+    microsoft: {
+      clientId: process.env.MICROSOFT_CLIENT_ID as string,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string,
+      // Update scopes to use Microsoft Graph API permissions instead of Outlook API
+      scopes: [
+        "openid",
+        "email",
+        "profile",
+        "Mail.Send",
+        "Mail.Read",
+        "Mail.ReadWrite",
+        "User.Read",
       ],
     },
   },

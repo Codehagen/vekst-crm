@@ -1,0 +1,442 @@
+// This is your Prisma schema file with the new EmailSync model integrated
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  // Used for direct database connections
+}
+
+// Unified Business/Lead model - Represents companies at any stage (lead to customer)
+
+model Business {
+  id                String         @id @default(cuid())
+  name              String
+  orgNumber         String?        @unique // Optional for early-stage leads
+  address           String?
+  postalCode        String?
+  city              String?
+  country           String?
+  contactPerson     String?
+  email             String
+  phone             String
+  website           String?
+  industry          String?
+  numberOfEmployees Int?
+  revenue           Float?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  bilagCount        Int            @default(0)
+  status            BusinessStatus
+  stage             CustomerStage  @default(lead) // Tracks customer lifecycle
+
+  // Fields specifically for leads
+  potensiellVerdi Float? // Potential value (only relevant for leads)
+
+  // Relations
+  contacts   Contact[]
+  activities Activity[]
+  offers     Offer[]
+  tags       Tag[]      @relation("BusinessToTag")
+  Ticket     Ticket[]
+  emailSyncs EmailSync[] // New relation to EmailSync model
+
+  @@map("businesses")
+}
+
+enum BusinessStatus {
+  active
+  inactive
+}
+
+enum CustomerStage {
+  lead
+  prospect
+  qualified
+  offer_sent // Tilbud sendt
+  offer_accepted // Tilbud akseptert
+  declined // Kunde takket nei/feil match
+  customer
+  churned
+
+  @@map("customer_stage")
+}
+
+// Tag model - For categorizing businesses
+
+model Tag {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  businesses Business[] @relation("BusinessToTag")
+  tickets    Ticket[]   @relation("TicketToTag")
+
+  @@map("tags")
+}
+
+// Contact model - People associated with businesses
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String
+  position  String?
+  isPrimary Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  activities Activity[]
+  offers     Offer[]
+  Ticket     Ticket[]
+  emailSyncs EmailSync[] // New relation to EmailSync model
+
+  @@map("contacts")
+}
+
+// Activity model - Interactions with businesses/contacts
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  date        DateTime
+  description String
+  completed   Boolean      @default(false)
+  outcome     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  businessId       String?
+  business         Business?       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId        String?
+  contact          Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  jobApplicationId String?
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  userId           String // We would typically have a User model
+  Ticket           Ticket?         @relation(fields: [ticketId], references: [id])
+  ticketId         String?
+
+  @@map("activities")
+}
+
+enum ActivityType {
+  call
+  meeting
+  email
+  note
+
+  @@map("activity_type")
+}
+
+// Offer model - Sales proposals to businesses
+
+model Offer {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  createdAt   DateTime    @default(now())
+  expiresAt   DateTime
+  status      OfferStatus
+  totalAmount Float
+  currency    String
+  notes       String?
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  businessId String
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId  String?
+  contact    Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  items      OfferItem[]
+
+  @@map("offers")
+}
+
+enum OfferStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+
+  @@map("offer_status")
+}
+
+// OfferItem model - Line items in an offer
+
+model OfferItem {
+  id          String @id @default(cuid())
+  description String
+  quantity    Int
+  unitPrice   Float
+  discount    Float?
+  tax         Float?
+  total       Float
+
+  // Relations
+  offerId String
+  offer   Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@map("offer_items")
+}
+
+// JobApplication model - For managing employment applications
+
+model JobApplication {
+  id              String               @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String
+  phone           String
+  address         String?
+  postalCode      String?
+  city            String?
+  country         String?
+  resume          String? // URL or path to the uploaded resume
+  coverLetter     String? // URL or path to the uploaded cover letter or content
+  experience      Int? // Years of experience
+  education       String?
+  skills          String[]
+  desiredPosition String?
+  currentEmployer String?
+  expectedSalary  Float?
+  startDate       DateTime?
+  notes           String?
+  source          String? // Where the application came from
+  applicationDate DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  status          JobApplicationStatus @default(new)
+
+  // Relations
+  activities Activity[]
+
+  @@map("job_applications")
+}
+
+enum JobApplicationStatus {
+  new
+  reviewing
+  interviewed
+  offer_extended
+  hired
+  rejected
+
+  @@map("job_application_status")
+}
+
+// Ticket system models
+
+model Ticket {
+  id          String       @id @default(cuid())
+  title       String
+  description String
+  status      TicketStatus @default(unassigned)
+  priority    Priority     @default(medium)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  dueDate     DateTime?
+  resolvedAt  DateTime?
+
+  // Submission metadata
+  submitterName        String?
+  submitterEmail       String?
+  submittedCompanyName String?
+
+  // Relations
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assigneeId String? // ID of user assigned to ticket
+  creatorId  String? // ID of user who created ticket
+
+  // Child relations
+  comments   TicketComment[]
+  activities Activity[]
+  tags       Tag[]           @relation("TicketToTag")
+
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isInternal Boolean  @default(false)
+
+  // Relations
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId String // ID of user who wrote comment
+
+  @@map("ticket_comments")
+}
+
+enum TicketStatus {
+  unassigned // Newly received, pending business assignment
+  open // Assigned to business but not being worked on
+  in_progress // Being actively worked on
+  waiting_on_customer
+  waiting_on_third_party
+  resolved
+  closed
+
+  @@map("ticket_status")
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+
+  @@map("priority")
+}
+
+model User {
+  id            String         @id
+  name          String
+  email         String
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  sessions      Session[]
+  accounts      Account[]
+  emailProvider EmailProvider?
+  emailSyncs    EmailSync[]    // New relation to EmailSync model
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model EmailProvider {
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String      // "google" | "microsoft"
+  email        String
+  accessToken  String      @db.Text
+  refreshToken String?     @db.Text
+  expiresAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  emailSyncs   EmailSync[] // New relation to EmailSync model
+
+  @@map("email_provider")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  subject   String
+  content   String   @db.Text
+  variables Json // Store template variables
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_template")
+}
+
+// New EmailSync model - For storing synced emails from email providers
+model EmailSync {
+  id              String    @id @default(cuid())
+  externalId      String    // Original email ID from the provider
+  subject         String
+  body            String    @db.Text
+  htmlBody        String?   @db.Text
+  sentAt          DateTime
+  receivedAt      DateTime?
+  fromEmail       String
+  fromName        String?
+  toEmail         String[]
+  ccEmail         String[]
+  bccEmail        String[]
+  attachments     Json?     // Store metadata about attachments
+  isRead          Boolean   @default(false)
+  isStarred       Boolean   @default(false)
+  isDeleted       Boolean   @default(false)  // For soft delete in CRM (doesn't affect original email)
+  folderPath      String?   // Original folder/label in email provider
+  threadId        String?   // For grouping emails in the same conversation
+  importance      String?   // Priority/importance flag from email
+  createdAt       DateTime  @default(now())  // When email was synced to CRM
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  businessId      String?
+  business        Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  
+  contactId       String?
+  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  
+  providerId      String
+  emailProvider   EmailProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, externalId])  // Ensure no duplicate emails for the same user
+  @@index([userId, businessId])   // Optimize queries for user's emails related to a business
+  @@index([userId, sentAt])       // Optimize timeline queries
+  @@map("email_syncs")
+}
