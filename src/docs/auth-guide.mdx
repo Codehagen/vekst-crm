@@ -1,0 +1,272 @@
+# Authentication Guide
+
+Our application uses Better Auth for secure, flexible authentication. This guide explains how to use our auth system effectively.
+
+## Quick Start
+
+### Server Components
+
+For server components, use `getServerSession()` to check if a user is authenticated:
+
+```tsx
+import { getServerSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+export default async function ProtectedPage() {
+  const session = await getServerSession();
+  
+  if (!session) {
+    redirect("/auth/login");
+  }
+  
+  // User is authenticated
+  return <div>Welcome, {session.user.name}!</div>;
+}
+```
+
+### Client Components
+
+For client components, use the `useAuth` hook:
+
+```tsx
+"use client";
+
+import { useAuth } from "@/hooks/auth";
+
+export function ProfileComponent() {
+  const { user, isLoading, isAuthenticated } = useAuth();
+  
+  if (isLoading) return <div>Loading...</div>;
+  if (!isAuthenticated) return null;
+  
+  return <div>Hello, {user?.name}!</div>;
+}
+```
+
+## Core Auth Components
+
+### Auth Guard
+
+Protect client routes with the `AuthGuard` component:
+
+```tsx
+import { AuthGuard } from "@/components/auth";
+
+export default function ClientPage() {
+  return (
+    <AuthGuard>
+      <div>This content is only visible to authenticated users</div>
+    </AuthGuard>
+  );
+}
+```
+
+### Login Form
+
+Use the pre-built `LoginForm` component:
+
+```tsx
+import { LoginForm } from "@/components/auth";
+
+export default function LoginPage() {
+  return (
+    <div>
+      <h1>Sign In</h1>
+      <LoginForm redirectUrl="/dashboard" />
+    </div>
+  );
+}
+```
+
+### User Profile
+
+Display user information with the `UserProfile` component:
+
+```tsx
+import { UserProfile } from "@/components/auth";
+
+export default function ProfilePage() {
+  return (
+    <div>
+      <h1>Your Profile</h1>
+      <UserProfile />
+    </div>
+  );
+}
+```
+
+## Authentication Flow
+
+### Sign In
+
+```tsx
+import { signIn } from "@/lib/auth/client";
+
+// Email and password
+await signIn.email({
+  email: "user@example.com",
+  password: "yourpassword",
+  callbackURL: "/dashboard",
+});
+
+// Social provider (Google, GitHub, etc.)
+await signIn.social({
+  provider: "google",
+  callbackURL: "/dashboard",
+});
+```
+
+### Sign Up
+
+```tsx
+import { signUp } from "@/lib/auth/client";
+
+await signUp.email({
+  email: "user@example.com",
+  password: "yourpassword",
+  name: "John Doe",
+  callbackURL: "/dashboard",
+});
+```
+
+### Sign Out
+
+```tsx
+import { signOut } from "@/lib/auth/client";
+
+await signOut({
+  fetchOptions: {
+    onSuccess: () => {
+      router.push("/auth/login");
+    }
+  }
+});
+```
+
+## Server Authentication
+
+### Protected API Routes
+
+Create authenticated API routes using server actions:
+
+```tsx
+import { createAuthenticatedAction } from "@/lib/auth";
+
+export const createPost = createAuthenticatedAction(
+  async (data: { title: string; content: string }, userId: string) => {
+    // User is authenticated and userId is available
+    
+    // Create post logic here...
+    const post = await db.posts.create({
+      data: {
+        ...data,
+        authorId: userId,
+      },
+    });
+    
+    return post;
+  }
+);
+```
+
+### Middleware Protection
+
+Our app uses middleware to protect routes automatically:
+
+```tsx
+// src/middleware.ts
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
+
+export async function middleware(request: NextRequest) {
+  const sessionCookie = getSessionCookie(request, {
+    cookieName: "better_auth_session",
+    cookiePrefix: "better-auth",
+  });
+
+  if (!sessionCookie) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    "/dashboard/:path*",
+    "/settings/:path*",
+    // Add other protected routes here
+  ],
+};
+```
+
+## Advanced Usage
+
+### Access User Data
+
+Access user data in server components:
+
+```tsx
+const session = await getServerSession();
+const user = session?.user;
+
+// User properties
+const { id, name, email, emailVerified } = user;
+```
+
+In client components:
+
+```tsx
+const { user } = useAuth();
+
+// User properties (with optional chaining for safety)
+const userId = user?.id;
+const userName = user?.name;
+```
+
+### Auth Hooks
+
+Our system includes custom hooks:
+
+1. `useAuth()` - Provides session info and authentication utilities 
+2. `requireAuth()` - Redirect if not authenticated
+
+```tsx
+const { requireAuth } = useAuth();
+
+useEffect(() => {
+  requireAuth(() => {
+    // This code only runs if authenticated
+    console.log("User is authenticated!");
+  });
+}, [requireAuth]);
+```
+
+## Folder Structure
+
+```
+src/
+├── lib/
+│   └── auth/
+│       ├── index.ts     # Main exports
+│       ├── config.ts    # Better Auth configuration
+│       ├── server.ts    # Server utilities
+│       ├── client.ts    # Client utilities
+│       └── actions.ts   # Authenticated server actions
+│
+├── hooks/
+│   └── auth/
+│       ├── index.ts     # Hook exports
+│       └── use-auth.ts  # Auth hook
+│
+└── components/
+    └── auth/
+        ├── index.ts        # Component exports
+        ├── user-profile.tsx # User profile component
+        ├── login-form.tsx  # Login form component
+        └── auth-guard.tsx  # Auth guard component
+```
+
+## Further Resources
+
+- [Better Auth Documentation](https://better-auth.io/docs) 

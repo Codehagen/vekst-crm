@@ -11,10 +11,12 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Used for direct database connections
+  directUrl = env("DIRECT_URL")
+  // Used for direct database connections
 }
 
 // Unified Business/Lead model - Represents companies at any stage (lead to customer)
+
 model Business {
   id                String         @id @default(cuid())
   name              String
@@ -69,6 +71,7 @@ enum CustomerStage {
 }
 
 // Tag model - For categorizing businesses
+
 model Tag {
   id         String     @id @default(cuid())
   name       String     @unique
@@ -79,6 +82,7 @@ model Tag {
 }
 
 // Contact model - People associated with businesses
+
 model Contact {
   id        String   @id @default(cuid())
   name      String
@@ -101,6 +105,7 @@ model Contact {
 }
 
 // Activity model - Interactions with businesses/contacts
+
 model Activity {
   id          String       @id @default(cuid())
   type        ActivityType
@@ -135,6 +140,7 @@ enum ActivityType {
 }
 
 // Offer model - Sales proposals to businesses
+
 model Offer {
   id          String      @id @default(cuid())
   title       String
@@ -168,6 +174,7 @@ enum OfferStatus {
 }
 
 // OfferItem model - Line items in an offer
+
 model OfferItem {
   id          String @id @default(cuid())
   description String
@@ -185,6 +192,7 @@ model OfferItem {
 }
 
 // JobApplication model - For managing employment applications
+
 model JobApplication {
   id              String               @id @default(cuid())
   firstName       String
@@ -228,6 +236,7 @@ enum JobApplicationStatus {
 }
 
 // Ticket system models
+
 model Ticket {
   id          String       @id @default(cuid())
   title       String
@@ -294,4 +303,93 @@ enum Priority {
   urgent
 
   @@map("priority")
+}
+
+model User {
+  id            String         @id
+  name          String
+  email         String
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  sessions      Session[]
+  accounts      Account[]
+  emailProvider EmailProvider?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model EmailProvider {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String // "google" | "microsoft"
+  email        String
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("email_provider")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  subject   String
+  content   String   @db.Text
+  variables Json // Store template variables
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_template")
 }
