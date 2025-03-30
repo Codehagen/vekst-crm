@@ -46,8 +46,9 @@ model Business {
   contacts   Contact[]
   activities Activity[]
   offers     Offer[]
-  tags       Tag[]      @relation("BusinessToTag")
+  tags       Tag[]       @relation("BusinessToTag")
   Ticket     Ticket[]
+  emailSyncs EmailSync[]
 
   @@map("businesses")
 }
@@ -96,10 +97,11 @@ model Contact {
 
   // Relations
   businessId String
-  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
   activities Activity[]
   offers     Offer[]
   Ticket     Ticket[]
+  emailSyncs EmailSync[]
 
   @@map("contacts")
 }
@@ -316,6 +318,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   emailProvider EmailProvider?
+  emailSyncs    EmailSync[]
 
   @@unique([email])
   @@map("user")
@@ -367,16 +370,17 @@ model Verification {
 }
 
 model EmailProvider {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider     String // "google" | "microsoft"
   email        String
-  accessToken  String    @db.Text
-  refreshToken String?   @db.Text
+  accessToken  String      @db.Text
+  refreshToken String?     @db.Text
   expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  emailSyncs   EmailSync[]
 
   @@map("email_provider")
 }
@@ -392,4 +396,49 @@ model EmailTemplate {
   updatedAt DateTime @updatedAt
 
   @@map("email_template")
+}
+
+// EmailSync model - For storing synced emails from email providers
+model EmailSync {
+  id          String    @id @default(cuid())
+  externalId  String // Original email ID from the provider
+  subject     String
+  body        String    @db.Text
+  htmlBody    String?   @db.Text
+  sentAt      DateTime
+  receivedAt  DateTime?
+  fromEmail   String
+  fromName    String?
+  toEmail     String[]
+  ccEmail     String[]
+  bccEmail    String[]
+  attachments Json? // Store metadata about attachments
+  isRead      Boolean   @default(false)
+  isStarred   Boolean   @default(false)
+  isDeleted   Boolean   @default(false) // For soft delete in CRM
+  folderPath  String? // Original folder/label in email provider
+  threadId    String? // For grouping emails in the same conversation
+  importance  String? // Priority/importance flag from email
+  metadata    Json? // Additional metadata (quoted content, signatures, etc.)
+  createdAt   DateTime  @default(now()) // When email was synced to CRM
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  providerId    String
+  emailProvider EmailProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, externalId]) // Ensure no duplicate emails for the same user
+  @@index([userId, businessId]) // Optimize queries for user's emails related to a business
+  @@index([userId, sentAt]) // Optimize timeline queries
+  @@index([threadId]) // Optimize thread-based queries
+  @@map("email_syncs")
 }

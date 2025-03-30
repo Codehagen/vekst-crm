@@ -4,6 +4,14 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { getServerSession } from "@/lib/auth/server";
+import type { EmailSync, Prisma } from "@prisma/client";
+import {
+  processEmail,
+  batchProcessEmails,
+} from "@/services/email/emailProcessor";
+import { fetchEmailsFromGmail } from "@/services/email/providers/gmailProvider";
+import { fetchEmailsFromOutlook } from "@/services/email/providers/outlookProvider";
 
 interface SendEmailProps {
   to: string;
@@ -475,5 +483,376 @@ export async function getEmailProviderStatus() {
   } catch (error) {
     console.error("Error getting email provider status:", error);
     return { connected: false, error: "Failed to check email provider status" };
+  }
+}
+
+// Types
+interface FetchEmailsParams {
+  businessId?: string;
+  isRead?: boolean;
+  isStarred?: boolean;
+  limit?: number;
+  orderBy?: "sentAt" | "receivedAt";
+  orderDirection?: "asc" | "desc";
+}
+
+interface SyncEmailsParams {
+  maxEmails?: number;
+  syncFrom?: Date | string;
+  businessId?: string;
+}
+
+interface UpdateEmailParams {
+  emailId: string;
+  isRead?: boolean;
+  isStarred?: boolean;
+  businessId?: string;
+  contactId?: string;
+}
+
+/**
+ * Fetch emails for the current user with optional filtering
+ */
+export async function fetchEmails(params: FetchEmailsParams = {}) {
+  try {
+    // Verify authentication
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Build the query with filters
+    const {
+      businessId,
+      isRead,
+      isStarred,
+      limit = 50,
+      orderBy = "sentAt",
+      orderDirection = "desc",
+    } = params;
+
+    const where: any = {
+      userId: user.id,
+      isDeleted: false,
+    };
+
+    // Add optional filters
+    if (businessId) {
+      where.businessId = businessId;
+    }
+
+    if (isRead !== undefined) {
+      where.isRead = isRead;
+    }
+
+    if (isStarred !== undefined) {
+      where.isStarred = isStarred;
+    }
+
+    // Execute the query
+    const emails = await prisma.emailSync.findMany({
+      where,
+      orderBy: {
+        [orderBy]: orderDirection,
+      },
+      take: limit,
+      include: {
+        business: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return { success: true, emails };
+  } catch (error) {
+    console.error("Error fetching emails:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Sync emails from the connected provider
+ */
+export async function syncEmails(params: SyncEmailsParams = {}) {
+  try {
+    // Verify authentication
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get the user with email provider
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { emailProvider: true },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (!user.emailProvider) {
+      throw new Error("No email provider connected");
+    }
+
+    // Parse parameters
+    const { maxEmails = 50 } = params;
+    const syncFrom =
+      params.syncFrom instanceof Date
+        ? params.syncFrom
+        : params.syncFrom
+        ? new Date(params.syncFrom)
+        : undefined;
+
+    // Prepare options
+    const options = {
+      maxEmails,
+      syncFrom,
+      labelFilter: ["INBOX"], // Default to inbox for Gmail
+      folderFilter: ["inbox"], // Default to inbox for Outlook
+    };
+
+    // Fetch emails based on provider type
+    let rawEmails: { id: string; raw: string }[] = [];
+
+    if (user.emailProvider.provider === "google") {
+      rawEmails = await fetchEmailsFromGmail(user.emailProvider, options);
+    } else if (user.emailProvider.provider === "microsoft") {
+      rawEmails = await fetchEmailsFromOutlook(user.emailProvider, options);
+    } else {
+      throw new Error("Unsupported email provider");
+    }
+
+    // Process emails
+    const results = await Promise.all(
+      rawEmails.map((email) =>
+        processEmail(email.raw, user.id, user.emailProvider!.id)
+      )
+    );
+
+    // Count successes and failures
+    const successes = results.filter((result) => result.success).length;
+    const failures = results.filter((result) => !result.success).length;
+
+    // Revalidate email list paths
+    revalidatePath("/dashboard/email");
+    revalidatePath("/leads");
+    if (params.businessId) {
+      revalidatePath(`/business/${params.businessId}`);
+    }
+
+    return {
+      success: true,
+      message: `Synced ${successes} emails successfully (${failures} failed)`,
+      totalProcessed: rawEmails.length,
+      successCount: successes,
+      failureCount: failures,
+    };
+  } catch (error) {
+    console.error("Error syncing emails:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Update an email (mark as read, starred, or associate with business/contact)
+ */
+export async function updateEmail(params: UpdateEmailParams) {
+  try {
+    // Verify authentication
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const { emailId, isRead, isStarred, businessId, contactId } = params;
+
+    // Verify email ownership
+    const email = await prisma.emailSync.findFirst({
+      where: {
+        id: emailId,
+        userId: user.id,
+      },
+      include: {
+        emailProvider: true,
+      },
+    });
+
+    if (!email) {
+      throw new Error("Email not found or access denied");
+    }
+
+    // Build update object with only defined fields
+    const updateData: any = {};
+
+    if (isRead !== undefined) {
+      updateData.isRead = isRead;
+    }
+
+    if (isStarred !== undefined) {
+      updateData.isStarred = isStarred;
+    }
+
+    if (businessId !== undefined) {
+      updateData.business = businessId
+        ? { connect: { id: businessId } }
+        : { disconnect: true };
+    }
+
+    if (contactId !== undefined) {
+      updateData.contact = contactId
+        ? { connect: { id: contactId } }
+        : { disconnect: true };
+    }
+
+    // Update in the database
+    const updatedEmail = await prisma.emailSync.update({
+      where: { id: emailId },
+      data: updateData,
+    });
+
+    // Also update in the email provider if status changed
+    if (
+      email.emailProvider &&
+      (isRead !== undefined || isStarred !== undefined)
+    ) {
+      try {
+        if (email.emailProvider.provider === "google") {
+          const { updateGmailEmailStatus } = await import(
+            "@/services/email/providers/gmailProvider"
+          );
+          await updateGmailEmailStatus(email.emailProvider, email.externalId, {
+            isRead,
+            isStarred,
+          });
+        } else if (email.emailProvider.provider === "microsoft") {
+          const { updateOutlookEmailStatus } = await import(
+            "@/services/email/providers/outlookProvider"
+          );
+          await updateOutlookEmailStatus(
+            email.emailProvider,
+            email.externalId,
+            {
+              isRead,
+              isStarred,
+            }
+          );
+        }
+      } catch (providerError) {
+        console.error("Error updating email in provider:", providerError);
+        // We don't fail the operation if provider update fails
+      }
+    }
+
+    // Revalidate paths
+    revalidatePath("/dashboard/email");
+    if (email.businessId) {
+      revalidatePath(`/business/${email.businessId}`);
+    }
+    if (businessId) {
+      revalidatePath(`/business/${businessId}`);
+    }
+
+    return { success: true, email: updatedEmail };
+  } catch (error) {
+    console.error("Error updating email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Associate multiple emails with a business
+ */
+export async function associateEmailsWithBusiness(
+  emailIds: string[],
+  businessId: string
+) {
+  try {
+    // Verify authentication
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify business exists
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+    });
+
+    if (!business) {
+      throw new Error("Business not found");
+    }
+
+    // Update all emails
+    const updatedEmails = await prisma.emailSync.updateMany({
+      where: {
+        id: { in: emailIds },
+        userId: user.id, // Ensure user owns these emails
+      },
+      data: {
+        businessId,
+      },
+    });
+
+    // Revalidate paths
+    revalidatePath("/dashboard/email");
+    revalidatePath(`/business/${businessId}`);
+
+    return {
+      success: true,
+      count: updatedEmails.count,
+    };
+  } catch (error) {
+    console.error("Error associating emails with business:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
