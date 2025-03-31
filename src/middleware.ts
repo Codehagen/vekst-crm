@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Check for session cookie directly
-  const sessionCookie = request.cookies.get("better-auth.session_token");
+  // Check for session cookie in both production and development formats
+  const devCookie = request.cookies.get("better-auth.session_token");
+  const prodCookie = request.cookies.get("__Secure-better-auth.session_token");
+
+  const sessionCookie = prodCookie || devCookie;
+
+  console.log("Dev cookie found:", !!devCookie);
+  console.log("Production cookie found:", !!prodCookie);
   console.log("Session cookie found:", !!sessionCookie);
 
   if (!sessionCookie || !sessionCookie.value) {
