@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
 
 export async function middleware(request: NextRequest) {
-  // Try to get cookie directly first
-  const directCookie = request.cookies.get("better-auth.session_token");
+  // Check for session cookie directly
+  const sessionCookie = request.cookies.get("better-auth.session_token");
+  console.log("Session cookie found:", !!sessionCookie);
 
-  // Fall back to using getSessionCookie if direct method fails
-  const sessionCookie =
-    directCookie?.value ||
-    getSessionCookie(request, {
-      cookieName: "session_token",
-      cookiePrefix: "better-auth",
-    });
-
-  if (!sessionCookie) {
+  if (!sessionCookie || !sessionCookie.value) {
+    console.log("No session cookie found, redirecting to auth/login");
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
@@ -21,9 +14,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/settings/:path*",
-    // Add other protected routes
-  ],
+  matcher: ["/dashboard"], // Apply middleware to specific routes
 };
