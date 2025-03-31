@@ -2,221 +2,142 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 import {
+  IconDashboard,
   IconUsers,
-  IconBuilding,
-  IconChartBar,
-  IconCalendarTime,
-  IconMessageCircle,
-  IconHome,
-  IconSettings,
-  IconClipboardList,
-  IconBriefcase,
-  IconLayoutGridAdd,
-  IconWaveSine,
-  IconCommand,
-  type Icon,
-  IconInnerShadowTop,
+  IconBuildingStore,
+  IconUserSearch,
+  IconTicket,
   IconMail,
+  IconInnerShadowTop,
+  IconSettings,
+  IconHelp,
+  IconSearch,
 } from "@tabler/icons-react";
 
-import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
-  SidebarRail,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+import { NavMain } from "@/components/nav-main";
+import { NavUser } from "@/components/nav-user";
+import { NavDocuments } from "./nav-documents";
+import { NavSecondary } from "./nav-secondary";
 
-// Sample data for teams
-const teamsData = {
-  teams: [
+const data = {
+  user: {
+    name: "shadcn",
+    email: "m@example.com",
+    avatar: "/avatars/shadcn.jpg",
+  },
+  navMain: [
     {
-      name: "Vekstloop",
-      logo: IconLayoutGridAdd,
-      plan: "Enterprise",
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconDashboard,
     },
     {
-      name: "Acme Corp.",
-      logo: IconWaveSine,
-      plan: "Startup",
+      title: "Leads",
+      url: "/leads",
+      icon: IconUsers,
     },
     {
-      name: "Evil Corp.",
-      logo: IconCommand,
-      plan: "Free",
+      title: "Annonser",
+      url: "/ads",
+      icon: IconBuildingStore,
+    },
+    {
+      title: "Jobbsøknader",
+      url: "/applications",
+      icon: IconUserSearch,
+    },
+  ],
+  support: [
+    {
+      name: "Tickets",
+      url: "/tickets",
+      icon: IconTicket,
+    },
+    {
+      name: "Email",
+      url: "/email",
+      icon: IconMail,
+    },
+  ],
+  navSecondary: [
+    {
+      title: "Settings",
+      url: "#",
+      icon: IconSettings,
+    },
+    {
+      title: "Get Help",
+      url: "#",
+      icon: IconHelp,
+    },
+    {
+      title: "Search",
+      url: "#",
+      icon: IconSearch,
     },
   ],
 };
 
-// CRM navigation items in Norwegian
-const crmItems = [
-  {
-    name: "Dashbord",
-    url: "/dashboard",
-    icon: IconHome,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Leads",
-    url: "/leads",
-    icon: IconUsers,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Annonser",
-    url: "/ads",
-    icon: IconLayoutGridAdd,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Jobbsøknader",
-    url: "/applications",
-    icon: IconBriefcase,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Tickets",
-    url: "/tickets",
-    icon: IconClipboardList,
-    group: "Hovedmoduler",
-  },
-  {
-    name: "Email",
-    url: "/dashboard/email",
-    icon: IconMail,
-    group: "Hovedmoduler",
-  },
-
-  // {
-  //   name: "Kontakter",
-  //   url: "/kontakter",
-  //   icon: IconUsers,
-  //   group: "Hovedmoduler",
-  // },
-  // {
-  //   name: "Bedrifter",
-  //   url: "/bedrifter",
-  //   icon: IconBuilding,
-  //   group: "Hovedmoduler",
-  // },
-  // {
-  //   name: "Muligheter",
-  //   url: "/muligheter",
-  //   icon: IconBriefcase,
-  //   group: "Hovedmoduler",
-  // },
-  // {
-  //   name: "Aktiviteter",
-  //   url: "/aktiviteter",
-  //   icon: IconCalendarTime,
-  //   group: "Hovedmoduler",
-  // },
-  // {
-  //   name: "Kommunikasjon",
-  //   url: "/kommunikasjon",
-  //   icon: IconMessageCircle,
-  //   group: "Verktøy",
-  // },
-  // {
-  //   name: "Oppgaver",
-  //   url: "/oppgaver",
-  //   icon: IconClipboardList,
-  //   group: "Verktøy",
-  // },
-  // {
-  //   name: "Rapporter",
-  //   url: "/rapporter",
-  //   icon: IconChartBar,
-  //   group: "Verktøy",
-  // },
-  // {
-  //   name: "Innstillinger",
-  //   url: "/innstillinger",
-  //   icon: IconSettings,
-  //   group: "Verktøy",
-  // },
-];
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
-  // Function to check if a navigation item is active
-  const isActive = (itemUrl: string) => {
-    // Check if the current path matches the item URL exactly
-    if (pathname === itemUrl) return true;
-
-    // Check if the current path starts with the item URL (for subpages)
-    // This handles cases like /bedrifter/[id] should highlight the /bedrifter menu item
-    if (itemUrl !== "/" && pathname.startsWith(itemUrl)) return true;
-
-    return false;
+  // Function to check if a path is active
+  const isActivePath = (path: string) => {
+    if (path === "/dashboard" && pathname === "/") return true;
+    return pathname === path;
   };
 
-  // Group the navigation items by their group property
-  const groupedItems = crmItems.reduce<Record<string, typeof crmItems>>(
-    (acc, item) => {
-      if (!acc[item.group]) {
-        acc[item.group] = [];
-      }
-      acc[item.group].push(item);
-      return acc;
-    },
-    {}
-  );
+  // Update data with active states
+  const navMainWithActive = data.navMain.map((item) => ({
+    ...item,
+    isActive: isActivePath(item.url),
+  }));
+
+  const supportWithActive = data.support.map((item) => ({
+    ...item,
+    isActive: isActivePath(item.url),
+  }));
+
+  const navSecondaryWithActive = data.navSecondary.map((item) => ({
+    ...item,
+    isActive: isActivePath(item.url),
+  }));
 
   return (
-    <Sidebar collapsible="icon" {...props}>
+    <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <SidebarMenuButton
-          asChild
-          className="data-[slot=sidebar-menu-button]:!p-1.5"
-        >
-          <a href="/">
-            <IconInnerShadowTop className="!size-5" />
-            <span className="text-base font-semibold">Sailsdock</span>
-          </a>
-        </SidebarMenuButton>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              className="data-[slot=sidebar-menu-button]:!p-1.5"
+            >
+              <a href="/dashboard">
+                <IconInnerShadowTop className="!size-5" />
+                <span className="text-base font-semibold">Sailsdock</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {Object.entries(groupedItems).map(([groupName, items]) => (
-          <SidebarGroup
-            key={groupName}
-            className="group-data-[collapsible=icon]:hidden"
-          >
-            <SidebarGroupLabel>{groupName}</SidebarGroupLabel>
-            <SidebarGroupContent className="flex flex-col gap-2">
-              <SidebarMenu>
-                {items.map((item) => (
-                  <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.name}
-                      className={cn(
-                        isActive(item.url) && "bg-accent text-accent-foreground"
-                      )}
-                    >
-                      <Link href={item.url}>
-                        <item.icon />
-                        <span>{item.name}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <NavMain items={navMainWithActive} />
+        <NavDocuments items={supportWithActive} title="Support" />
+        <NavSecondary items={navSecondaryWithActive} className="mt-auto" />
       </SidebarContent>
-      <SidebarRail />
+      <SidebarFooter>
+        <NavUser user={data.user} />
+      </SidebarFooter>
     </Sidebar>
   );
 }
