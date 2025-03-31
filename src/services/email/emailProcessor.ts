@@ -100,7 +100,7 @@ function extractAddresses(
 
   // If it's a single address object
   if ("address" in addressObj) {
-    return [addressObj.address];
+    return [addressObj.address as string];
   }
 
   return [];

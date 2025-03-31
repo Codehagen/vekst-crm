@@ -825,84 +825,23 @@ export function EmailProviderSetup({ className }: EmailProviderSetupProps) {
       ) : (
         <CardContent className="space-y-4">
           <Button
-            onClick={connectGmail}
+            onClick={initiateDirectGoogleAuth}
             className="w-full"
             variant="outline"
-            disabled={isConnecting}
+            disabled={true}
           >
             <IconBrandGoogle className="mr-2 h-4 w-4" />
-            {isConnecting ? "Connecting..." : "Connect Gmail"}
+            {isConnecting ? "Connecting..." : "Connect Gmail (Coming Soon)"}
           </Button>
           <Button
-            onClick={connectOutlook}
+            onClick={initiateDirectMicrosoftAuth}
             className="w-full"
             variant="outline"
             disabled={isConnecting}
           >
             <IconBrandWindows className="mr-2 h-4 w-4" />
-            Connect Outlook
+            {isConnecting ? "Connecting..." : "Connect Outlook"}
           </Button>
-
-          <div className="pt-2 border-t mt-4">
-            <p className="text-sm text-muted-foreground mb-2">
-              If you're having trouble connecting, try these options:
-            </p>
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Button
-                  onClick={checkProviderStatus}
-                  variant="ghost"
-                  size="sm"
-                  disabled={isRefreshing}
-                >
-                  <IconRefresh className="mr-1 h-4 w-4" />
-                  Refresh Status
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={manuallyFetchGoogleTokens}
-                  variant="ghost"
-                  size="sm"
-                  disabled={isRefreshing}
-                >
-                  <IconBrandGoogle className="mr-1 h-4 w-4" />
-                  Manual Gmail Connect
-                </Button>
-                <Button
-                  onClick={manuallyFetchMicrosoftTokens}
-                  variant="ghost"
-                  size="sm"
-                  disabled={isRefreshing}
-                >
-                  <IconBrandWindows className="mr-1 h-4 w-4" />
-                  Manual Outlook Connect
-                </Button>
-              </div>
-              <div className="flex flex-col gap-2 pt-2">
-                <Button
-                  onClick={initiateDirectGoogleAuth}
-                  variant="outline"
-                  size="sm"
-                  disabled={isConnecting}
-                >
-                  <IconBrandGoogle className="mr-1 h-4 w-4" />
-                  <IconExternalLink className="mr-1 h-3 w-3" />
-                  Direct Gmail OAuth with Refresh Token
-                </Button>
-                <Button
-                  onClick={initiateDirectMicrosoftAuth}
-                  variant="outline"
-                  size="sm"
-                  disabled={isConnecting}
-                >
-                  <IconBrandWindows className="mr-1 h-4 w-4" />
-                  <IconExternalLink className="mr-1 h-3 w-3" />
-                  Direct Outlook OAuth with Refresh Token
-                </Button>
-              </div>
-            </div>
-          </div>
         </CardContent>
       )}
 
