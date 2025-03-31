@@ -42,13 +42,30 @@ model Business {
   // Fields specifically for leads
   potensiellVerdi Float? // Potential value (only relevant for leads)
 
+  // Customer-specific fields
+  customerSince          DateTime?
+  contractType           String?
+  contractValue          Float?
+  contractRenewalDate    DateTime?
+  accountManager         String?
+  paymentTerms           String?
+  customerSegment        String?
+  churnRisk              ChurnRiskLevel? @default(low)
+  lastReviewDate         DateTime?
+  npsScore               Int?
+  preferredContactMethod ContactMethod?
+
+  // SMS-related fields
+  smsOptIn Boolean @default(false)
+
   // Relations
-  contacts   Contact[]
-  activities Activity[]
-  offers     Offer[]
-  tags       Tag[]       @relation("BusinessToTag")
-  Ticket     Ticket[]
-  emailSyncs EmailSync[]
+  contacts    Contact[]
+  activities  Activity[]
+  offers      Offer[]
+  tags        Tag[]        @relation("BusinessToTag")
+  Ticket      Ticket[]
+  emailSyncs  EmailSync[]
+  smsMessages SmsMessage[]
 
   @@map("businesses")
 }
@@ -97,11 +114,12 @@ model Contact {
 
   // Relations
   businessId String
-  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   activities Activity[]
   offers     Offer[]
   Ticket     Ticket[]
   emailSyncs EmailSync[]
+  SmsMessage SmsMessage[]
 
   @@map("contacts")
 }
@@ -441,4 +459,55 @@ model EmailSync {
   @@index([userId, sentAt]) // Optimize timeline queries
   @@index([threadId]) // Optimize thread-based queries
   @@map("email_syncs")
+}
+
+// Add these new enums after the existing ones
+enum ChurnRiskLevel {
+  low
+  medium
+  high
+  critical
+
+  @@map("churn_risk_level")
+}
+
+enum ContactMethod {
+  email
+  phone
+  sms
+
+  @@map("contact_method")
+}
+
+// Add this new model near the end of the file, before User model
+model SmsMessage {
+  id        String           @id @default(cuid())
+  content   String
+  sentAt    DateTime         @default(now())
+  status    SmsStatus
+  direction MessageDirection
+
+  // Relations
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@map("sms_messages")
+}
+
+enum SmsStatus {
+  pending
+  sent
+  delivered
+  failed
+
+  @@map("sms_status")
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+
+  @@map("message_direction")
 }

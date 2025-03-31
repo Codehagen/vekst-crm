@@ -6,6 +6,9 @@ import {
   Contact,
   Activity,
   Offer,
+  SmsMessage,
+  SmsStatus,
+  MessageDirection,
 } from "@prisma/client";
 
 export interface CreateBusinessInput {
@@ -270,6 +273,72 @@ export const businessService = {
         items: true,
         contact: true,
       },
+    });
+  },
+
+  /**
+   * Get customers (businesses at customer stage)
+   */
+  getCustomers: async (): Promise<Business[]> => {
+    return prisma.business.findMany({
+      where: {
+        stage: CustomerStage.customer,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+  },
+
+  /**
+   * Convert a lead to a customer with additional data
+   */
+  convertToCustomer: async (
+    businessId: string,
+    customerData: any
+  ): Promise<Business> => {
+    return prisma.business.update({
+      where: { id: businessId },
+      data: {
+        stage: CustomerStage.customer,
+        customerSince: new Date(),
+        ...customerData,
+      },
+    });
+  },
+
+  /**
+   * Send SMS to a business
+   */
+  sendSms: async (businessId: string, content: string): Promise<SmsMessage> => {
+    // 1. Get business details
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+    });
+
+    if (!business) throw new Error("Business not found");
+
+    // 2. Call SMS provider API (implementation needed)
+    // const smsResponse = await smsProviderClient.sendSms(business.phone, content);
+
+    // 3. Store the SMS in the database
+    return prisma.smsMessage.create({
+      data: {
+        content,
+        status: SmsStatus.pending, // Update with actual status when SMS API is implemented
+        direction: MessageDirection.outbound,
+        businessId,
+      },
+    });
+  },
+
+  /**
+   * Get SMS history for a business
+   */
+  getSmsHistory: async (businessId: string): Promise<SmsMessage[]> => {
+    return prisma.smsMessage.findMany({
+      where: { businessId },
+      orderBy: { sentAt: "desc" },
     });
   },
 };

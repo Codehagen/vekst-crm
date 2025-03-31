@@ -99,18 +99,19 @@ export function formatCompactNumber(num: number): string {
 }
 
 /**
- * Formats a number as currency with consistent server/client rendering
+ * Format a number as currency with consistent server/client rendering
  */
-export function formatCurrency(amount: number, currency = "NOK"): string {
+export function formatCurrency(
+  amount: number,
+  currency: string = "NOK",
+  locale: string = "nb-NO"
+): string {
   // Use a fixed locale and formatting that works on both server and client
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-    currencyDisplay: "code", // Use currency code for consistent rendering
-  })
-    .format(amount)
-    .replace(currency, currency + " ") // Adjust spacing consistently
-    .trim();
+    currencyDisplay: "symbol",
+  }).format(amount);
 }
 
 // Tremor focusRing [v0.0.1]
