@@ -11,11 +11,21 @@ import { EmptyState } from "@/components/customer/empty-state";
 import { Business } from "@prisma/client";
 import { getCustomers } from "../actions/customers/actions";
 import { columns } from "@/components/customer/columns";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ImportEmailWizard } from "@/components/customer/import-email-wizard";
+import { checkEmailImportAvailability } from "@/app/actions/customer";
 
 export default function CustomersPage() {
   // State to manage customers data
   const [customers, setCustomers] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showImportWizard, setShowImportWizard] = useState(false);
+  const [importStatus, setImportStatus] = useState<{
+    available: boolean;
+    emailCount?: number;
+    needsEmailSetup?: boolean;
+    needsEmailSync?: boolean;
+  } | null>(null);
 
   // Function to fetch customers that can be called multiple times
   const refreshCustomers = useCallback(async () => {
@@ -37,8 +47,20 @@ export default function CustomersPage() {
   }, [refreshCustomers]);
 
   // Handle importing customers
-  const handleImportCustomers = () => {
-    toast.info("Import functionality coming soon!");
+  const handleImportCustomers = async () => {
+    try {
+      const status = await checkEmailImportAvailability();
+      setImportStatus(status);
+      setShowImportWizard(true);
+    } catch (error) {
+      console.error("Failed to check import availability:", error);
+      // Show dialog anyway, the wizard will handle the error
+      setImportStatus({
+        available: false,
+        needsEmailSetup: true,
+      });
+      setShowImportWizard(true);
+    }
   };
 
   // Handle converting leads to customers
@@ -88,6 +110,20 @@ export default function CustomersPage() {
           />
         )}
       </main>
+
+      <Dialog
+        open={showImportWizard}
+        onOpenChange={(open) => !open && setShowImportWizard(false)}
+      >
+        <DialogContent className="max-w-2xl p-0">
+          <ImportEmailWizard
+            emailCount={importStatus?.emailCount}
+            needsEmailSetup={importStatus?.needsEmailSetup}
+            needsEmailSync={importStatus?.needsEmailSync}
+            onClose={() => setShowImportWizard(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -3,22 +3,23 @@ import { Icons } from "@/components/icons";
 export const BLUR_FADE_DELAY = 0.15;
 
 export const siteConfig = {
-  name: "Vekstloop CRM",
-  description: "Vekstloop CRM - Din partner innen vekst og markedsføring",
+  name: "Sailsdock",
+  description: "Sailsdock - Din partner innen vekst og markedsføring",
   cta: "Get Started",
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   keywords: [
-    "Vekstloop CRM",
+    "Sailsdock",
+    "Sailsdock CRM",
     "Vekst og markedsføring",
     "Bedriftsvekst",
     "Markedsføring",
   ],
   links: {
-    email: "support@vekstloop.no",
-    twitter: "https://twitter.com/vekstloop",
-    discord: "https://discord.gg/vekstloop",
-    github: "https://github.com/vekstloop",
-    instagram: "https://instagram.com/vekstloop",
+    email: "support@sailsdock.no",
+    twitter: "https://twitter.com/sailsdock",
+    discord: "https://discord.gg/sailsdock",
+    github: "https://github.com/sailsdock",
+    instagram: "https://instagram.com/sailsdock",
   },
   footer: {
     socialLinks: [
@@ -36,7 +37,7 @@ export const siteConfig = {
       { text: "Contact", url: "#" },
     ],
     bottomText: "All rights reserved.",
-    brandText: "Vekstloop CRM",
+    brandText: "Sailsdock",
   },
 };
 

@@ -13,6 +13,12 @@ import {
   MoreHorizontal,
   Forward,
   ExternalLink,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  Trash,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -26,26 +32,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { fetchEmails, updateEmail } from "@/app/actions/email";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CustomerEmailHistoryProps {
   customerId: string;
 }
 
+interface EmailAttachment {
+  name: string;
+  size: number;
+  type: string;
+}
+
 interface Email {
   id: string;
+  externalId: string;
   subject: string;
   body: string;
+  htmlBody?: string | null;
   fromEmail: string;
-  fromName: string;
-  sentAt: Date;
+  fromName: string | null;
+  toEmail: string[];
+  sentAt: string | Date;
   isRead: boolean;
   isStarred: boolean;
-  attachments: {
-    name: string;
-    size: number;
-    type: string;
-  }[];
-  direction: "incoming" | "outgoing";
+  attachments?: EmailAttachment[];
+  threadId?: string | null;
 }
 
 export function CustomerEmailHistory({
@@ -53,80 +68,113 @@ export function CustomerEmailHistory({
 }: CustomerEmailHistoryProps) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
 
-  useEffect(() => {
-    const fetchEmails = async () => {
-      try {
-        setLoading(true);
-        // Replace with actual API call when available
-        // const data = await getEmailsByBusinessId(customerId);
-        // Simulate API call for now
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        const mockEmails: Email[] = [
-          {
-            id: "1",
-            subject: "Kontraktfornyelse 2023/2024",
-            body: "Hei,\n\nVi ønsker å starte prosessen med å fornye kontrakten deres som utløper neste måned. Vedlagt finner dere forslag til ny kontrakt med oppdaterte betingelser.\n\nMvh,\nKundeservice",
-            fromEmail: "support@ourcompany.com",
-            fromName: "Kundeservice",
-            sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
-            isRead: true,
-            isStarred: true,
-            attachments: [
-              {
-                name: "kontrakt_fornyelse.pdf",
-                size: 1456789,
-                type: "application/pdf",
-              },
-            ],
-            direction: "outgoing",
-          },
-          {
-            id: "2",
-            subject: "Re: Kontraktfornyelse 2023/2024",
-            body: "Hei,\n\nTakk for tilsendt kontraktsforslag. Vi har noen spørsmål angående prisbetingelsene i punkt 3.2. Kan vi ta et møte om dette neste uke?\n\nMvh,\nJohn Doe\nCEO, Customer Company",
-            fromEmail: "john.doe@customer.com",
-            fromName: "John Doe",
-            sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4), // 4 days ago
-            isRead: true,
-            isStarred: false,
-            attachments: [],
-            direction: "incoming",
-          },
-          {
-            id: "3",
-            subject: "Kvartalsrapport Q1",
-            body: "Hei,\n\nVedlagt finner dere kvartalsrapporten for Q1 som viser bruken av våre tjenester i perioden januar-mars.\n\nLa oss vite om dere har spørsmål til rapporten.\n\nMvh,\nAccount Manager",
-            fromEmail: "account@ourcompany.com",
-            fromName: "Account Manager",
-            sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-            isRead: false,
-            isStarred: false,
-            attachments: [
-              {
-                name: "q1_rapport.xlsx",
-                size: 2345678,
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              },
-              {
-                name: "presentasjon.pptx",
-                size: 3456789,
-                type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-              },
-            ],
-            direction: "outgoing",
-          },
-        ];
-        setEmails(mockEmails);
-      } catch (error) {
-        console.error("Error fetching emails:", error);
-        toast.error("Failed to load email history");
-      } finally {
-        setLoading(false);
+  // Function to fetch customer emails
+  const loadEmails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await fetchEmails({
+        businessId: customerId,
+        limit: 50,
+        orderBy: "sentAt",
+        orderDirection: "desc",
+      });
+
+      if (result.success && result.emails) {
+        // Transform API response to match Email interface
+        const formattedEmails: Email[] = result.emails.map((email: any) => ({
+          id: email.id,
+          externalId: email.externalId,
+          subject: email.subject,
+          body: email.body,
+          htmlBody: email.htmlBody,
+          fromEmail: email.fromEmail,
+          fromName: email.fromName,
+          toEmail: Array.isArray(email.toEmail) ? email.toEmail : [],
+          sentAt: email.sentAt,
+          isRead: Boolean(email.isRead),
+          isStarred: Boolean(email.isStarred),
+          attachments: email.attachments
+            ? JSON.parse(JSON.stringify(email.attachments))
+            : [],
+          threadId: email.threadId,
+        }));
+
+        setEmails(formattedEmails);
+      } else {
+        setError(result.error || "Kunne ikke hente e-poster");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching emails:", err);
+      setError("Det oppstod en feil ved henting av e-poster");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchEmails();
+  // Function to refresh emails
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await loadEmails();
+      toast.success("E-poster oppdatert");
+    } catch (err) {
+      toast.error("Kunne ikke oppdatere e-poster");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Mark email as read/starred
+  const handleUpdateEmail = async (
+    emailId: string,
+    data: { isRead?: boolean; isStarred?: boolean }
+  ) => {
+    try {
+      const result = await updateEmail({
+        emailId,
+        ...data,
+      });
+
+      if (result.success) {
+        // Update local state
+        setEmails(
+          emails.map((email) =>
+            email.id === emailId ? { ...email, ...data } : email
+          )
+        );
+
+        // Also update selected email if opened
+        if (selectedEmail?.id === emailId) {
+          setSelectedEmail((prev) => (prev ? { ...prev, ...data } : null));
+        }
+      }
+    } catch (err) {
+      console.error("Error updating email:", err);
+      toast.error("Kunne ikke oppdatere e-post");
+    }
+  };
+
+  // Handle opening an email
+  const handleOpenEmail = (email: Email) => {
+    setSelectedEmail(email);
+    setShowEmailDialog(true);
+
+    // Mark as read if not already
+    if (!email.isRead) {
+      handleUpdateEmail(email.id, { isRead: true });
+    }
+  };
+
+  // Load emails on component mount
+  useEffect(() => {
+    loadEmails();
   }, [customerId]);
 
   // Format file size in human-readable format
@@ -143,20 +191,60 @@ export function CustomerEmailHistory({
     return <Paperclip className="h-4 w-4" />;
   };
 
-  // Sort emails by date (newest first)
-  const sortedEmails = [...emails].sort(
-    (a, b) => b.sentAt.getTime() - a.sentAt.getTime()
-  );
+  // Get formatted date
+  const getFormattedDate = (date: string | Date) => {
+    const dateObj = typeof date === "string" ? new Date(date) : date;
+    return format(dateObj, "d. MMMM yyyy, HH:mm", {
+      locale: nb,
+    });
+  };
+
+  // Determine if email is incoming or outgoing
+  const isIncomingEmail = (email: Email): boolean => {
+    // If the email is from our domain, it's outgoing
+    // This is a simplistic approach - in a real app, you would check the user's email domains
+    return !email.fromEmail.includes("ourcompany.com");
+  };
+
+  // Parse email attachments from metadata
+  const getEmailAttachments = (email: Email): EmailAttachment[] => {
+    if (email.attachments) return email.attachments;
+
+    // If no attachments property, try to parse from metadata
+    return [];
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">E-posthistorikk</h3>
-        <Button size="sm" className="gap-1">
-          <Plus className="h-4 w-4" />
-          <span>Ny e-post</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </Button>
+          <Button size="sm" className="gap-1">
+            <Plus className="h-4 w-4" />
+            <span>Ny e-post</span>
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Feil</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {loading ? (
         <div className="space-y-4">
@@ -164,35 +252,36 @@ export function CustomerEmailHistory({
             <Skeleton key={i} className="h-[120px] w-full" />
           ))}
         </div>
-      ) : sortedEmails.length > 0 ? (
+      ) : emails.length > 0 ? (
         <div className="space-y-4">
-          {sortedEmails.map((email) => (
+          {emails.map((email) => (
             <Card
               key={email.id}
               className={`
-              ${!email.isRead ? "border-primary/20 bg-primary/5" : ""}
-              hover:bg-muted/50 transition-colors duration-200
-            `}
+                ${!email.isRead ? "border-primary/20 bg-primary/5" : ""}
+                hover:bg-muted/50 transition-colors duration-200 cursor-pointer
+              `}
+              onClick={() => handleOpenEmail(email)}
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
                     <div
                       className={`
-                      p-2 rounded-full
-                      ${
-                        email.direction === "incoming"
-                          ? "bg-muted"
-                          : "bg-primary/10 text-primary"
-                      }
-                    `}
+                        p-2 rounded-full
+                        ${
+                          isIncomingEmail(email)
+                            ? "bg-muted"
+                            : "bg-primary/10 text-primary"
+                        }
+                      `}
                     >
                       <Mail className="h-4 w-4" />
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium text-base flex items-center gap-1">
-                          {email.subject}
+                          {email.subject || "(Ingen emne)"}
                           {email.isStarred && (
                             <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                           )}
@@ -200,16 +289,15 @@ export function CustomerEmailHistory({
                       </div>
                       <div className="flex items-center text-sm text-muted-foreground gap-2">
                         <span>
-                          {email.fromName} &lt;{email.fromEmail}&gt;
+                          {email.fromName || email.fromEmail} &lt;
+                          {email.fromEmail}&gt;
                         </span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {format(email.sentAt, "d. MMMM yyyy, HH:mm", {
-                            locale: nb,
-                          })}
+                          {getFormattedDate(email.sentAt)}
                         </span>
-                        {email.direction === "incoming" ? (
+                        {isIncomingEmail(email) ? (
                           <Badge variant="outline" className="ml-1">
                             Mottatt
                           </Badge>
@@ -222,20 +310,22 @@ export function CustomerEmailHistory({
                       <p className="text-sm line-clamp-2 text-muted-foreground">
                         {email.body}
                       </p>
-                      {email.attachments.length > 0 && (
+                      {getEmailAttachments(email).length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {email.attachments.map((attachment, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-1 bg-muted py-1 px-2 rounded-md text-xs"
-                            >
-                              {getAttachmentIcon(attachment.type)}
-                              <span>{attachment.name}</span>
-                              <span className="text-muted-foreground">
-                                ({formatFileSize(attachment.size)})
-                              </span>
-                            </div>
-                          ))}
+                          {getEmailAttachments(email).map(
+                            (attachment, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center gap-1 bg-muted py-1 px-2 rounded-md text-xs"
+                              >
+                                {getAttachmentIcon(attachment.type)}
+                                <span>{attachment.name}</span>
+                                <span className="text-muted-foreground">
+                                  ({formatFileSize(attachment.size)})
+                                </span>
+                              </div>
+                            )
+                          )}
                         </div>
                       )}
                     </div>
@@ -243,7 +333,12 @@ export function CustomerEmailHistory({
                   <div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -256,7 +351,15 @@ export function CustomerEmailHistory({
                           <Forward className="h-4 w-4" />
                           <span>Videresend</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="flex items-center gap-2">
+                        <DropdownMenuItem
+                          className="flex items-center gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateEmail(email.id, {
+                              isStarred: !email.isStarred,
+                            });
+                          }}
+                        >
                           <Star className="h-4 w-4" />
                           <span>
                             {email.isStarred
@@ -277,17 +380,152 @@ export function CustomerEmailHistory({
           ))}
         </div>
       ) : (
-        <div className="rounded-md border border-dashed p-6 text-center">
-          <h4 className="font-medium">Ingen e-poster</h4>
-          <p className="text-muted-foreground text-sm mt-1">
-            Det er ingen e-posthistorikk for denne kunden ennå.
+        <div className="text-center py-8 border rounded-md">
+          <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h4 className="text-lg font-medium">Ingen e-poster funnet</h4>
+          <p className="text-muted-foreground mt-1 mb-4">
+            Denne kunden har ingen e-poster tilknyttet enda.
           </p>
-          <Button variant="outline" size="sm" className="mt-4 gap-1">
-            <Plus className="h-4 w-4" />
-            <span>Send første e-post</span>
+          <Button size="sm" variant="outline" onClick={handleRefresh}>
+            Oppdater
           </Button>
         </div>
       )}
+
+      {/* Email Detail Dialog */}
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col p-0">
+          {selectedEmail && (
+            <>
+              <div className="p-4 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowEmailDialog(false)}
+                    className="h-8 w-8"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <h2 className="text-xl font-semibold">
+                    {selectedEmail.subject || "(Ingen emne)"}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() =>
+                      handleUpdateEmail(selectedEmail.id, {
+                        isStarred: !selectedEmail.isStarred,
+                      })
+                    }
+                    className="h-8 w-8"
+                  >
+                    <Star
+                      className={`h-4 w-4 ${
+                        selectedEmail.isStarred
+                          ? "text-yellow-500 fill-yellow-500"
+                          : ""
+                      }`}
+                    />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Reply className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Forward className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-4 border-b bg-muted/30">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">Fra:</div>
+                    <div>
+                      {selectedEmail.fromName || selectedEmail.fromEmail} &lt;
+                      {selectedEmail.fromEmail}&gt;
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">Til:</div>
+                    <div>{selectedEmail.toEmail.join(", ")}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">Dato:</div>
+                    <div>{getFormattedDate(selectedEmail.sentAt)}</div>
+                  </div>
+                  {getEmailAttachments(selectedEmail).length > 0 && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="font-medium">Vedlegg:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {getEmailAttachments(selectedEmail).map(
+                          (attachment, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1 bg-background py-1 px-2 rounded-md text-xs"
+                            >
+                              {getAttachmentIcon(attachment.type)}
+                              <span>{attachment.name}</span>
+                              <span className="text-muted-foreground">
+                                ({formatFileSize(attachment.size)})
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Tabs
+                defaultValue="text"
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <div className="border-b px-4">
+                  <TabsList className="w-fit h-9 mt-2">
+                    <TabsTrigger value="text" className="h-8 px-3">
+                      Tekst
+                    </TabsTrigger>
+                    {selectedEmail.htmlBody && (
+                      <TabsTrigger value="html" className="h-8 px-3">
+                        HTML
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+                </div>
+
+                <TabsContent
+                  value="text"
+                  className="flex-1 overflow-auto p-4 m-0 border-0"
+                >
+                  <div className="whitespace-pre-wrap">
+                    {selectedEmail.body}
+                  </div>
+                </TabsContent>
+
+                {selectedEmail.htmlBody && (
+                  <TabsContent
+                    value="html"
+                    className="flex-1 overflow-auto p-4 m-0 border-0"
+                  >
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: selectedEmail.htmlBody,
+                      }}
+                    />
+                  </TabsContent>
+                )}
+              </Tabs>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
