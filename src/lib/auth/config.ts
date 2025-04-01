@@ -27,6 +27,46 @@ export const auth = betterAuth({
   }),
   secret: process.env.BETTER_AUTH_SECRET as string,
   baseURL: process.env.BETTER_AUTH_URL as string,
+  // Add custom user fields for CRM functionality
+  user: {
+    additionalFields: {
+      phone: {
+        type: "string",
+        required: false,
+      },
+      jobTitle: {
+        type: "string",
+        required: false,
+      },
+      company: {
+        type: "string",
+        required: false,
+      },
+      workspaceId: {
+        type: "string",
+        required: false,
+      },
+      department: {
+        type: "string",
+        required: false,
+      },
+      timezone: {
+        type: "string",
+        required: false,
+        defaultValue: "Europe/Oslo",
+      },
+      bio: {
+        type: "string",
+        required: false,
+      },
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false, // Don't allow this to be set during signup
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },
@@ -36,6 +76,13 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       // Add scopes for email sending permission from email-provider-integration.md
       scopes: ["openid", "email", "profile", "https://mail.google.com/"],
+      // Map Google profile fields to our custom fields
+      mapProfileToUser: (profile) => {
+        return {
+          phone: "",
+          company: "",
+        };
+      },
     },
     microsoft: {
       clientId: process.env.MICROSOFT_CLIENT_ID as string,
@@ -47,6 +94,13 @@ export const auth = betterAuth({
         "profile",
         "https://outlook.office.com/Mail.Send",
       ],
+      // Map Microsoft profile fields to our custom fields
+      mapProfileToUser: (profile) => {
+        return {
+          company: "",
+          jobTitle: profile.job_title || "",
+        };
+      },
     },
   },
   plugins: [nextCookies()],

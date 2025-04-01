@@ -331,6 +331,14 @@ model User {
   email         String
   emailVerified Boolean
   image         String?
+  phone         String?
+  jobTitle      String?
+  company       String?
+  workspaceId   String?
+  department    String?
+  timezone      String?
+  bio           String?
+  role          String?
   createdAt     DateTime
   updatedAt     DateTime
   sessions      Session[]
@@ -417,6 +425,7 @@ model EmailTemplate {
 }
 
 // EmailSync model - For storing synced emails from email providers
+
 model EmailSync {
   id          String    @id @default(cuid())
   externalId  String // Original email ID from the provider
@@ -454,14 +463,19 @@ model EmailSync {
   providerId    String
   emailProvider EmailProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, externalId]) // Ensure no duplicate emails for the same user
-  @@index([userId, businessId]) // Optimize queries for user's emails related to a business
-  @@index([userId, sentAt]) // Optimize timeline queries
-  @@index([threadId]) // Optimize thread-based queries
+  // Ensure no duplicate emails for the same user
+  // Optimize queries for user's emails related to a business
+  // Optimize timeline queries
+  // Optimize thread-based queries
+  @@unique([userId, externalId])
+  @@index([userId, businessId])
+  @@index([userId, sentAt])
+  @@index([threadId])
   @@map("email_syncs")
 }
 
 // Add these new enums after the existing ones
+
 enum ChurnRiskLevel {
   low
   medium
@@ -480,6 +494,7 @@ enum ContactMethod {
 }
 
 // Add this new model near the end of the file, before User model
+
 model SmsMessage {
   id        String           @id @default(cuid())
   content   String
