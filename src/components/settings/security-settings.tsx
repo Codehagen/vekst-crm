@@ -121,7 +121,7 @@ export function SecuritySettings() {
     resolver: zodResolver(deleteAccountSchema),
     defaultValues: {
       password: "",
-      confirmText: "",
+      confirmText: "DELETE",
     },
   });
 
@@ -315,7 +315,7 @@ export function SecuritySettings() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Email Address</CardTitle>
           <CardDescription>
@@ -359,9 +359,9 @@ export function SecuritySettings() {
             </form>
           </Form>
         </CardContent>
-      </Card>
+      </Card> */}
 
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Security Settings</CardTitle>
           <CardDescription>
@@ -441,7 +441,7 @@ export function SecuritySettings() {
             </form>
           </Form>
         </CardContent>
-      </Card>
+      </Card> */}
 
       <Card>
         <CardHeader>

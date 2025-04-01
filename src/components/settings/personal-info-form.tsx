@@ -23,11 +23,35 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { updateUserProfile } from "@/app/actions/user-settings";
+import { updateUserProfile, getUserProfile } from "@/app/actions/user-settings";
 import { useSession } from "@/lib/auth/client";
 import { toast } from "sonner";
+
+// Define an extended user type to include the custom fields
+interface ExtendedUser {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  image?: string | null;
+  phone?: string;
+  jobTitle?: string;
+  company?: string;
+  workspaceId?: string;
+  department?: string;
+  timezone?: string;
+  bio?: string;
+  role?: string;
+}
+
+// Declare session type with extended user
+type ExtendedSession = {
+  user: ExtendedUser;
+  token: string | null;
+};
 
 const profileFormSchema = z.object({
   name: z
@@ -43,14 +67,6 @@ const profileFormSchema = z.object({
     .min(1, { message: "This field is required." })
     .email("This is not a valid email."),
   phone: z.string().optional(),
-  bio: z
-    .string()
-    .max(160, {
-      message: "Bio must not be longer than 160 characters.",
-    })
-    .optional(),
-  jobTitle: z.string().optional(),
-  company: z.string().optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -66,28 +82,47 @@ export function PersonalInfoForm() {
       name: "",
       email: "",
       phone: "",
-      bio: "",
-      jobTitle: "",
-      company: "",
     },
     mode: "onChange",
   });
 
-  // Reset form with session data when it becomes available
+  // Fetch user data directly from server
   useEffect(() => {
-    if (session?.user) {
-      const { name, email } = session.user;
+    async function fetchUserData() {
+      try {
+        const result = await getUserProfile();
+
+        if (result.success && result.data) {
+          const userData = result.data;
+
+          form.reset({
+            name: userData.name || "",
+            email: userData.email || "",
+            phone: userData.phone || "",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+    }
+
+    fetchUserData();
+  }, [form]);
+
+  // Fallback to session data if available
+  useEffect(() => {
+    if (session?.user && !form.getValues().phone) {
+      // Cast session to ExtendedSession to access custom fields
+      const user = session.user as ExtendedUser;
+      const { name, email } = user;
+      const phone = user.phone || "";
 
       // Only reset if we have actual session data
       if (name || email) {
         form.reset({
           name: name || "",
           email: email || "",
-          // Preserve existing values for optional fields
-          phone: form.getValues("phone"),
-          bio: form.getValues("bio"),
-          jobTitle: form.getValues("jobTitle"),
-          company: form.getValues("company"),
+          phone,
         });
       }
     }
@@ -101,6 +136,7 @@ export function PersonalInfoForm() {
       const formData = new FormData();
       formData.append("name", data.name);
       formData.append("image", session?.user?.image || "");
+      formData.append("phone", data.phone || "");
 
       // Call the server action
       const result = await updateUserProfile(formData);
@@ -186,6 +222,9 @@ export function PersonalInfoForm() {
                   <User className="h-8 w-8" />
                 </AvatarFallback>
               </Avatar>
+              <p className="text-sm text-muted-foreground">
+                Profile image is managed by your authentication provider.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -231,53 +270,8 @@ export function PersonalInfoForm() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="jobTitle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Your job title" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="company"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Company</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Your company" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
-            <FormField
-              control={form.control}
-              name="bio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bio</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Tell us a little about yourself"
-                      className="resize-none"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Brief description for your profile. URLs are hyperlinked.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
             <div className="flex justify-end">
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Saving..." : "Save changes"}

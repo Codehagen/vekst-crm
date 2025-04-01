@@ -9,6 +9,7 @@ import { z } from "zod";
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   image: z.string().url().optional().nullable(),
+  phone: z.string().optional(),
 });
 
 // Schema for password change
@@ -45,15 +46,17 @@ export async function updateUserProfile(formData: FormData) {
 
     const name = formData.get("name") as string;
     const image = formData.get("image") as string;
+    const phone = formData.get("phone") as string;
 
     // Validate the data
-    const validatedData = profileSchema.parse({ name, image });
+    const validatedData = profileSchema.parse({ name, image, phone });
 
     // Update the user
     await auth.api.updateUser({
       body: {
         name: validatedData.name,
         image: validatedData.image,
+        phone: validatedData.phone,
       },
       headers: await headers(),
     });
@@ -324,6 +327,38 @@ export async function unlinkUserAccount(formData: FormData) {
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to unlink account",
+    };
+  }
+}
+
+/**
+ * Get user profile information
+ */
+export async function getUserProfile() {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session || !session.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // This approach follows the same pattern used in updateUserProfile
+    // which successfully handles the phone field
+
+    // For auth API implementations that don't provide extended user fields in session
+    // You can add a prisma query here to fetch additional user data by user.id
+
+    return {
+      success: true,
+      data: session.user,
+    };
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch profile",
     };
   }
 }
