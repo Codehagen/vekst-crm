@@ -10,12 +10,12 @@ export function SettingsHeader() {
           <Button variant="ghost" size="icon" asChild>
             <Link href="/dashboard">
               <ArrowLeft className="h-4 w-4" />
-              <span className="sr-only">Back to dashboard</span>
+              <span className="sr-only">Tilbake til dashboard</span>
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Innstillinger</h1>
         </div>
-        <p className="text-muted-foreground">Manage your account settings and preferences.</p>
+        <p className="text-muted-foreground">Administrer kontoinnstillingene og preferansene dine.</p>
       </div>
     </div>
   )

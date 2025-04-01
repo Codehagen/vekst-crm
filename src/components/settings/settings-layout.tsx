@@ -18,13 +18,13 @@ export function SettingsLayout() {
       onValueChange={setActiveTab}
     >
       <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="personal">Personal Info</TabsTrigger>
-        <TabsTrigger value="security">Security</TabsTrigger>
+        <TabsTrigger value="personal">Personlig</TabsTrigger>
+        <TabsTrigger value="security">Sikkerhet</TabsTrigger>
         <TabsTrigger value="notifications" disabled>
-          Notifications
+          Notifikasjoner
         </TabsTrigger>
         <TabsTrigger value="appearance" disabled>
-          Appearance
+          Utseende
         </TabsTrigger>
       </TabsList>
       <TabsContent value="personal" className="space-y-6">

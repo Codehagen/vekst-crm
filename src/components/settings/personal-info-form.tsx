@@ -1,18 +1,18 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { User } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card'
 import {
   Form,
   FormControl,
@@ -21,137 +21,143 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { updateUserProfile, getUserProfile } from "@/app/actions/user-settings";
-import { useSession } from "@/lib/auth/client";
-import { toast } from "sonner";
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { updateUserProfile, getUserProfile } from '@/app/actions/user-settings'
+import { useSession } from '@/lib/auth/client'
+import { toast } from 'sonner'
 
 // Define an extended user type to include the custom fields
 interface ExtendedUser {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  image?: string | null;
-  phone?: string;
-  jobTitle?: string;
-  company?: string;
-  workspaceId?: string;
-  department?: string;
-  timezone?: string;
-  bio?: string;
-  role?: string;
+  id: string
+  name: string
+  email: string
+  emailVerified: boolean
+  createdAt: Date
+  updatedAt: Date
+  image?: string | null
+  phone?: string
+  jobTitle?: string
+  company?: string
+  workspaceId?: string
+  department?: string
+  timezone?: string
+  bio?: string
+  role?: string
 }
 
 // Declare session type with extended user
 type ExtendedSession = {
-  user: ExtendedUser;
-  token: string | null;
-};
+  user: ExtendedUser
+  token: string | null
+}
 
 const profileFormSchema = z.object({
   name: z
     .string()
     .min(2, {
-      message: "Name must be at least 2 characters.",
+      message: 'Name must be at least 2 characters.',
     })
     .max(30, {
-      message: "Name must not be longer than 30 characters.",
+      message: 'Name must not be longer than 30 characters.',
     }),
   email: z
     .string()
-    .min(1, { message: "This field is required." })
-    .email("This is not a valid email."),
+    .min(1, { message: 'This field is required.' })
+    .email('This is not a valid email.'),
   phone: z.string().optional(),
-});
+})
 
-type ProfileFormValues = z.infer<typeof profileFormSchema>;
+type ProfileFormValues = z.infer<typeof profileFormSchema>
 
 export function PersonalInfoForm() {
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const { data: session, isPending } = useSession();
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const { data: session, isPending } = useSession()
 
   // Initialize form with empty values
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
+      name: '',
+      email: '',
+      phone: '',
     },
-    mode: "onChange",
-  });
+    mode: 'onChange',
+  })
 
   // Fetch user data directly from server
   useEffect(() => {
     async function fetchUserData() {
       try {
-        const result = await getUserProfile();
+        const result = await getUserProfile()
 
         if (result.success && result.data) {
-          const userData = result.data;
+          const userData = result.data
 
           form.reset({
-            name: userData.name || "",
-            email: userData.email || "",
-            phone: userData.phone || "",
-          });
+            name: userData.name || '',
+            email: userData.email || '',
+            phone: userData.phone || '',
+          })
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error);
+        console.error('Error fetching user profile:', error)
       }
     }
 
-    fetchUserData();
-  }, [form]);
+    fetchUserData()
+  }, [form])
 
   // Fallback to session data if available
   useEffect(() => {
     if (session?.user && !form.getValues().phone) {
       // Cast session to ExtendedSession to access custom fields
-      const user = session.user as ExtendedUser;
-      const { name, email } = user;
-      const phone = user.phone || "";
+      const user = session.user as ExtendedUser
+      const { name, email } = user
+      const phone = user.phone || ''
 
       // Only reset if we have actual session data
       if (name || email) {
         form.reset({
-          name: name || "",
-          email: email || "",
+          name: name || '',
+          email: email || '',
           phone,
-        });
+        })
       }
     }
-  }, [session, form]);
+  }, [session, form])
 
   async function onSubmit(data: ProfileFormValues) {
-    setIsLoading(true);
+    setIsLoading(true)
 
     try {
       // Create FormData object
-      const formData = new FormData();
-      formData.append("name", data.name);
-      formData.append("image", session?.user?.image || "");
-      formData.append("phone", data.phone || "");
+      const formData = new FormData()
+      formData.append('name', data.name)
+      formData.append('image', session?.user?.image || '')
+      formData.append('phone', data.phone || '')
 
       // Call the server action
-      const result = await updateUserProfile(formData);
+      const result = await updateUserProfile(formData)
 
       if (result.success) {
-        toast.success("Profile updated successfully");
+        toast.success('Profile updated successfully')
       } else {
-        toast.error(result.error || "Failed to update profile");
+        toast.error(result.error || 'Failed to update profile')
       }
     } catch (error) {
-      console.error("Error updating profile:", error);
-      toast.error("An unexpected error occurred");
+      console.error('Error updating profile:', error)
+      toast.error('An unexpected error occurred')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
+  }
+
+  const data = {
+    header: 'Personlig Informasjon',
+    description:
+      'Oppdater din personlige informasjon og hvordan andre ser deg på plattformen.',
   }
 
   // Show loading state when session is loading
@@ -159,11 +165,8 @@ export function PersonalInfoForm() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>
-            Update your personal information and how others see you on the
-            platform.
-          </CardDescription>
+          <CardTitle>{data.header}</CardTitle>
+          <CardDescription>{data.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="animate-pulse space-y-6">
@@ -183,7 +186,7 @@ export function PersonalInfoForm() {
           </div>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   // If no session data is available, show a message
@@ -191,23 +194,18 @@ export function PersonalInfoForm() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>
-            Please sign in to update your personal information.
-          </CardDescription>
+          <CardTitle>{data.header}</CardTitle>
+          <CardDescription>Vennligst logg inn.</CardDescription>
         </CardHeader>
       </Card>
-    );
+    )
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Personal Information</CardTitle>
-        <CardDescription>
-          Update your personal information and how others see you on the
-          platform.
-        </CardDescription>
+        <CardTitle>{data.header}</CardTitle>
+        <CardDescription>{data.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <Form {...form}>
@@ -215,15 +213,15 @@ export function PersonalInfoForm() {
             <div className="flex items-center gap-4 mb-6">
               <Avatar className="h-16 w-16">
                 <AvatarImage
-                  src={session?.user?.image || ""}
-                  alt={session?.user?.name || "User"}
+                  src={session?.user?.image || ''}
+                  alt={session?.user?.name || 'User'}
                 />
                 <AvatarFallback>
                   <User className="h-8 w-8" />
                 </AvatarFallback>
               </Avatar>
               <p className="text-sm text-muted-foreground">
-                Profile image is managed by your authentication provider.
+                Profilbildet administreres av autentiseringsleverandøren din. F.eks Gmail
               </p>
             </div>
 
@@ -233,9 +231,9 @@ export function PersonalInfoForm() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>Fullt navn</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your name" {...field} />
+                      <Input placeholder="Ola Normann" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -246,12 +244,12 @@ export function PersonalInfoForm() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>E-post</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your email" disabled {...field} />
+                      <Input placeholder="E-post" disabled {...field} />
                     </FormControl>
                     <FormDescription>
-                      To change your email address, go to the Security tab.
+                      Gå til Sikkerhetsfanen for å endre E-posten din.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -262,9 +260,9 @@ export function PersonalInfoForm() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
+                    <FormLabel>Telefonnummer</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your phone number" {...field} />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -274,12 +272,12 @@ export function PersonalInfoForm() {
 
             <div className="flex justify-end">
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save changes"}
+                {isLoading ? 'Lagrer...' : 'Lagre endringer'}
               </Button>
             </div>
           </form>
         </Form>
       </CardContent>
     </Card>
-  );
+  )
 }
