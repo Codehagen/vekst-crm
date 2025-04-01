@@ -1,12 +1,11 @@
-import { SettingsHeader } from "@/components/settings/settings-header"
-import { SettingsLayout } from "@/components/settings/settings-layout"
-import type { Metadata } from "next"
-
+import { SettingsHeader } from "@/components/settings/settings-header";
+import { SettingsLayout } from "@/components/settings/settings-layout";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Settings",
-  description: "Manage your account settings and preferences.",
-}
+  title: "Innstillinger",
+  description: "Behandle din konto og preferenser.",
+};
 
 export default function SettingsPage() {
   return (
@@ -14,6 +13,5 @@ export default function SettingsPage() {
       <SettingsHeader />
       <SettingsLayout />
     </div>
-  )
+  );
 }
-

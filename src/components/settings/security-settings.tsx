@@ -1,17 +1,17 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import { Button } from '@/components/ui/button'
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -20,19 +20,19 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { AlertCircle, KeyRound, Shield, Trash } from 'lucide-react'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { AlertCircle, KeyRound, Shield, Trash } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   changeUserPassword,
   changeUserEmail,
   deleteUserAccount,
   updateSecuritySettings,
-} from '@/app/actions/user-settings'
-import { useSession } from '@/lib/auth/client'
-import { toast } from 'sonner'
+} from "@/app/actions/user-settings";
+import { useSession } from "@/lib/auth/client";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -41,73 +41,73 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from "@/components/ui/dialog";
 
 const passwordFormSchema = z
   .object({
     currentPassword: z.string().min(8, {
-      message: 'Password must be at least 8 characters.',
+      message: "Password must be at least 8 characters.",
     }),
     newPassword: z.string().min(8, {
-      message: 'Password must be at least 8 characters.',
+      message: "Password must be at least 8 characters.",
     }),
     confirmPassword: z.string().min(8, {
-      message: 'Password must be at least 8 characters.',
+      message: "Password must be at least 8 characters.",
     }),
     revokeOtherSessions: z.boolean().default(false),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  })
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 const emailFormSchema = z.object({
   newEmail: z.string().email({
-    message: 'Please enter a valid email address.',
+    message: "Please enter a valid email address.",
   }),
-})
+});
 
 const securityFormSchema = z.object({
   twoFactorAuth: z.boolean().default(false),
   sessionTimeout: z.boolean().default(true),
-})
+});
 
 const deleteAccountSchema = z.object({
-  password: z.string().min(1, { message: 'Password is required' }),
-  confirmText: z.string().refine((val) => val === 'DELETE', {
-    message: 'You must type DELETE to confirm',
+  password: z.string().min(1, { message: "Password is required" }),
+  confirmText: z.string().refine((val) => val === "DELETE", {
+    message: "You must type DELETE to confirm",
   }),
-})
+});
 
-type PasswordFormValues = z.infer<typeof passwordFormSchema>
-type EmailFormValues = z.infer<typeof emailFormSchema>
-type SecurityFormValues = z.infer<typeof securityFormSchema>
-type DeleteAccountFormValues = z.infer<typeof deleteAccountSchema>
+type PasswordFormValues = z.infer<typeof passwordFormSchema>;
+type EmailFormValues = z.infer<typeof emailFormSchema>;
+type SecurityFormValues = z.infer<typeof securityFormSchema>;
+type DeleteAccountFormValues = z.infer<typeof deleteAccountSchema>;
 
 export function SecuritySettings() {
-  const { data: session } = useSession()
-  const [isPasswordLoading, setIsPasswordLoading] = useState<boolean>(false)
-  const [isEmailLoading, setIsEmailLoading] = useState<boolean>(false)
-  const [isSecurityLoading, setIsSecurityLoading] = useState<boolean>(false)
-  const [isDeleteLoading, setIsDeleteLoading] = useState<boolean>(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const { data: session } = useSession();
+  const [isPasswordLoading, setIsPasswordLoading] = useState<boolean>(false);
+  const [isEmailLoading, setIsEmailLoading] = useState<boolean>(false);
+  const [isSecurityLoading, setIsSecurityLoading] = useState<boolean>(false);
+  const [isDeleteLoading, setIsDeleteLoading] = useState<boolean>(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
     defaultValues: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
       revokeOtherSessions: false,
     },
-  })
+  });
 
   const emailForm = useForm<EmailFormValues>({
     resolver: zodResolver(emailFormSchema),
     defaultValues: {
-      newEmail: '',
+      newEmail: "",
     },
-  })
+  });
 
   const securityForm = useForm<SecurityFormValues>({
     resolver: zodResolver(securityFormSchema),
@@ -115,115 +115,115 @@ export function SecuritySettings() {
       twoFactorAuth: false,
       sessionTimeout: true,
     },
-  })
+  });
 
   const deleteForm = useForm<DeleteAccountFormValues>({
     resolver: zodResolver(deleteAccountSchema),
     defaultValues: {
-      password: '',
-      confirmText: 'DELETE',
+      password: "",
+      confirmText: "DELETE",
     },
-  })
+  });
 
   async function onPasswordSubmit(data: PasswordFormValues) {
-    setIsPasswordLoading(true)
+    setIsPasswordLoading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('currentPassword', data.currentPassword)
-      formData.append('newPassword', data.newPassword)
-      formData.append('revokeOtherSessions', String(data.revokeOtherSessions))
+      const formData = new FormData();
+      formData.append("currentPassword", data.currentPassword);
+      formData.append("newPassword", data.newPassword);
+      formData.append("revokeOtherSessions", String(data.revokeOtherSessions));
 
-      const result = await changeUserPassword(formData)
+      const result = await changeUserPassword(formData);
 
       if (result.success) {
-        toast.success('Password changed successfully')
+        toast.success("Password changed successfully");
         passwordForm.reset({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: '',
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
           revokeOtherSessions: false,
-        })
+        });
       } else {
-        toast.error(result.error || 'Failed to change password')
+        toast.error(result.error || "Failed to change password");
       }
     } catch (error) {
-      console.error('Error changing password:', error)
-      toast.error('An unexpected error occurred')
+      console.error("Error changing password:", error);
+      toast.error("An unexpected error occurred");
     } finally {
-      setIsPasswordLoading(false)
+      setIsPasswordLoading(false);
     }
   }
 
   async function onEmailSubmit(data: EmailFormValues) {
-    setIsEmailLoading(true)
+    setIsEmailLoading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('newEmail', data.newEmail)
-      formData.append('callbackURL', '/settings')
+      const formData = new FormData();
+      formData.append("newEmail", data.newEmail);
+      formData.append("callbackURL", "/settings");
 
-      const result = await changeUserEmail(formData)
+      const result = await changeUserEmail(formData);
 
       if (result.success) {
-        toast.success(result.message || 'Email change initiated')
-        emailForm.reset()
+        toast.success(result.message || "Email change initiated");
+        emailForm.reset();
       } else {
-        toast.error(result.error || 'Failed to change email')
+        toast.error(result.error || "Failed to change email");
       }
     } catch (error) {
-      console.error('Error changing email:', error)
-      toast.error('An unexpected error occurred')
+      console.error("Error changing email:", error);
+      toast.error("An unexpected error occurred");
     } finally {
-      setIsEmailLoading(false)
+      setIsEmailLoading(false);
     }
   }
 
   async function onSecuritySubmit(data: SecurityFormValues) {
-    setIsSecurityLoading(true)
+    setIsSecurityLoading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('twoFactorAuth', String(data.twoFactorAuth))
-      formData.append('sessionTimeout', String(data.sessionTimeout))
+      const formData = new FormData();
+      formData.append("twoFactorAuth", String(data.twoFactorAuth));
+      formData.append("sessionTimeout", String(data.sessionTimeout));
 
-      const result = await updateSecuritySettings(formData)
+      const result = await updateSecuritySettings(formData);
 
       if (result.success) {
-        toast.success('Security settings updated')
+        toast.success("Security settings updated");
       } else {
-        toast.error(result.error || 'Failed to update security settings')
+        toast.error(result.error || "Failed to update security settings");
       }
     } catch (error) {
-      console.error('Error updating security settings:', error)
-      toast.error('An unexpected error occurred')
+      console.error("Error updating security settings:", error);
+      toast.error("An unexpected error occurred");
     } finally {
-      setIsSecurityLoading(false)
+      setIsSecurityLoading(false);
     }
   }
 
   async function onDeleteAccount(data: DeleteAccountFormValues) {
-    setIsDeleteLoading(true)
+    setIsDeleteLoading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('password', data.password)
-      formData.append('confirmText', data.confirmText)
+      const formData = new FormData();
+      formData.append("password", data.password);
+      formData.append("confirmText", data.confirmText);
 
-      const result = await deleteUserAccount(formData)
+      const result = await deleteUserAccount(formData);
 
       if (result.success) {
-        toast.success('Account deleted successfully')
-        setDeleteDialogOpen(false)
+        toast.success("Account deleted successfully");
+        setDeleteDialogOpen(false);
         // The user will be redirected automatically after account deletion
       } else {
-        toast.error(result.error || 'Failed to delete account')
+        toast.error(result.error || "Failed to delete account");
       }
     } catch (error) {
-      console.error('Error deleting account:', error)
-      toast.error('An unexpected error occurred')
+      console.error("Error deleting account:", error);
+      toast.error("An unexpected error occurred");
     } finally {
-      setIsDeleteLoading(false)
+      setIsDeleteLoading(false);
     }
   }
 
@@ -240,7 +240,8 @@ export function SecuritySettings() {
           <Form {...passwordForm}>
             <form
               onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
-              className="space-y-4">
+              className="space-y-4"
+            >
               <FormField
                 control={passwordForm.control}
                 name="currentPassword"
@@ -306,7 +307,7 @@ export function SecuritySettings() {
               />
               <div className="flex justify-end">
                 <Button type="submit" disabled={isPasswordLoading}>
-                  {isPasswordLoading ? 'Lagrer...' : 'Lagre passord'}
+                  {isPasswordLoading ? "Lagrer..." : "Lagre passord"}
                 </Button>
               </div>
             </form>
@@ -444,9 +445,9 @@ export function SecuritySettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardTitle className="text-destructive">Faresone</CardTitle>
           <CardDescription>
-            Permanently delete your account and all of your data.
+            Slett kontoen din og alle dataene dine permanent.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -454,41 +455,43 @@ export function SecuritySettings() {
             <div className="flex items-start space-x-4">
               <Trash className="mt-0.5 h-5 w-5 text-destructive" />
               <div className="space-y-2 flex-1">
-                <h4 className="font-medium text-destructive">Delete Account</h4>
+                <h4 className="font-medium text-destructive">Slett Konto</h4>
                 <p className="text-sm text-muted-foreground">
-                  Once you delete your account, there is no going back. This
-                  action cannot be undone.
+                  Når du sletter kontoen din, er det ingen vei tilbake. Denne
+                  handlingen kan ikke angres.
                 </p>
                 <Dialog
                   open={deleteDialogOpen}
-                  onOpenChange={setDeleteDialogOpen}>
+                  onOpenChange={setDeleteDialogOpen}
+                >
                   <DialogTrigger asChild>
                     <Button variant="destructive" size="sm">
-                      Delete account
+                      Slett konto
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Are you absolutely sure?</DialogTitle>
+                      <DialogTitle>Er du helt sikker?</DialogTitle>
                       <DialogDescription>
-                        This will permanently delete your account and all
-                        associated data. This action cannot be undone.
+                        Dette vil permanent slette kontoen din og alle
+                        tilknyttede data. Denne handlingen kan ikke angres.
                       </DialogDescription>
                     </DialogHeader>
                     <Form {...deleteForm}>
                       <form
                         onSubmit={deleteForm.handleSubmit(onDeleteAccount)}
-                        className="space-y-4">
+                        className="space-y-4"
+                      >
                         <FormField
                           control={deleteForm.control}
                           name="password"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Password</FormLabel>
+                              <FormLabel>Passord</FormLabel>
                               <FormControl>
                                 <Input
                                   type="password"
-                                  placeholder="Enter your password"
+                                  placeholder="Skriv inn passordet ditt"
                                   {...field}
                                 />
                               </FormControl>
@@ -501,11 +504,11 @@ export function SecuritySettings() {
                           name="confirmText"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Confirm deletion</FormLabel>
+                              <FormLabel>Bekreft sletting</FormLabel>
                               <FormDescription>
-                                Please type{' '}
-                                <span className="font-medium">DELETE</span> to
-                                confirm
+                                Vennligst skriv{" "}
+                                <span className="font-medium">DELETE</span> for
+                                å bekrefte
                               </FormDescription>
                               <FormControl>
                                 <Input placeholder="DELETE" {...field} />
@@ -518,14 +521,16 @@ export function SecuritySettings() {
                           <Button
                             variant="outline"
                             onClick={() => setDeleteDialogOpen(false)}
-                            type="button">
-                            Cancel
+                            type="button"
+                          >
+                            Avbryt
                           </Button>
                           <Button
                             variant="destructive"
                             type="submit"
-                            disabled={isDeleteLoading}>
-                            {isDeleteLoading ? 'Deleting...' : 'Delete account'}
+                            disabled={isDeleteLoading}
+                          >
+                            {isDeleteLoading ? "Sletter..." : "Slett konto"}
                           </Button>
                         </DialogFooter>
                       </form>
@@ -538,5 +543,5 @@ export function SecuritySettings() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
