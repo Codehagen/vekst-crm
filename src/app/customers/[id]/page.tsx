@@ -1,7 +1,5 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense } from "react";
+import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import {
   ChevronLeft,
@@ -23,38 +21,27 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { toast } from "sonner";
 
 import { Business, ChurnRiskLevel } from "@prisma/client";
 import { getCustomerById } from "@/app/actions/customers/actions";
 import { formatCurrency } from "@/lib/utils";
 import { CustomerTabs } from "@/components/customer/customer-tabs";
 
-export default function CustomerDetailsPage() {
-  const params = useParams();
-  const customerId = params.id as string;
+interface CustomerDetailsPageProps {
+  params: {
+    id: string;
+  };
+}
 
-  const [customer, setCustomer] = useState<Business | null>(null);
-  const [loading, setLoading] = useState(true);
+export default async function CustomerDetailsPage({
+  params,
+}: CustomerDetailsPageProps) {
+  const customerId = params.id;
+  const customer = await getCustomerById(customerId);
 
-  useEffect(() => {
-    const fetchCustomer = async () => {
-      try {
-        setLoading(true);
-        const data = await getCustomerById(customerId);
-        setCustomer(data);
-      } catch (error) {
-        console.error("Error fetching customer:", error);
-        toast.error("Failed to load customer details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (customerId) {
-      fetchCustomer();
-    }
-  }, [customerId]);
+  if (!customer) {
+    return notFound();
+  }
 
   const getRiskBadge = (risk: ChurnRiskLevel | null) => {
     if (!risk) return null;
@@ -100,7 +87,7 @@ export default function CustomerDetailsPage() {
         items={[
           { label: "Dashboard", href: "/" },
           { label: "Customers", href: "/customers" },
-          { label: customer?.name || "Kunde detaljer", isCurrentPage: true },
+          { label: customer.name || "Kunde detaljer", isCurrentPage: true },
         ]}
       />
 
@@ -112,178 +99,146 @@ export default function CustomerDetailsPage() {
             </Button>
           </Link>
 
-          {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-1/3" />
-              <Skeleton className="h-5 w-1/4" />
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight flex items-center">
+                {customer.name}
+                {getRiskBadge(customer.churnRisk)}
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Kunde siden {formatDate(customer.customerSince)}
+              </p>
             </div>
-          ) : customer ? (
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight flex items-center">
-                  {customer.name}
-                  {getRiskBadge(customer.churnRisk)}
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  Kunde siden {formatDate(customer.customerSince)}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline">Rediger</Button>
-                <Button>Send SMS</Button>
-              </div>
+            <div className="flex gap-2">
+              <Button variant="outline">Rediger</Button>
+              <Button>Send SMS</Button>
             </div>
-          ) : (
-            <div className="bg-destructive/10 p-4 rounded-md flex items-center gap-3 text-destructive">
-              <AlertCircle />
-              <p>Kunne ikke finne kunden med ID: {customerId}</p>
-            </div>
-          )}
+          </div>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-[200px] w-full" />
-            ))}
-          </div>
-        ) : customer ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {/* Customer Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    Kontaktinformasjon
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Kontaktperson
-                    </p>
-                    <p className="font-medium">
-                      {customer.contactPerson || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Telefon</p>
-                    <p className="font-medium flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      {customer.phone}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">E-post</p>
-                    <p className="font-medium flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      {customer.email}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Adresse</p>
-                    <p className="font-medium">
-                      {customer.address ? (
-                        <>
-                          {customer.address}
-                          <br />
-                          {customer.postalCode} {customer.city}
-                          {customer.country ? `, ${customer.country}` : ""}
-                        </>
-                      ) : (
-                        "-"
-                      )}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {/* Customer Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Kontaktinformasjon
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Kontaktperson</p>
+                <p className="font-medium">{customer.contactPerson || "-"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Telefon</p>
+                <p className="font-medium flex items-center gap-2">
+                  <Phone className="h-4 w-4" />
+                  {customer.phone}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">E-post</p>
+                <p className="font-medium flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  {customer.email}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Adresse</p>
+                <p className="font-medium">
+                  {customer.address ? (
+                    <>
+                      {customer.address}
+                      <br />
+                      {customer.postalCode} {customer.city}
+                      {customer.country ? `, ${customer.country}` : ""}
+                    </>
+                  ) : (
+                    "-"
+                  )}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Contract Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Kontraktinformasjon
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Kontrakttype
-                    </p>
-                    <p className="font-medium">
-                      {customer.contractType || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Kontraktverdi
-                    </p>
-                    <p className="font-medium">
-                      {customer.contractValue
-                        ? formatCurrency(customer.contractValue, "NOK")
-                        : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Betalingsvilkår
-                    </p>
-                    <p className="font-medium">
-                      {customer.paymentTerms || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Fornyes</p>
-                    <p className="font-medium flex items-center gap-2">
-                      <CalendarClock className="h-4 w-4" />
-                      {formatDate(customer.contractRenewalDate)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+          {/* Contract Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Kontraktinformasjon
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Kontrakttype</p>
+                <p className="font-medium">{customer.contractType || "-"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Kontraktverdi</p>
+                <p className="font-medium">
+                  {customer.contractValue
+                    ? formatCurrency(customer.contractValue, "NOK")
+                    : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Betalingsvilkår</p>
+                <p className="font-medium">{customer.paymentTerms || "-"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Fornyes</p>
+                <p className="font-medium flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" />
+                  {formatDate(customer.contractRenewalDate)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Additional Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tilleggsinformasjon</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Kundesegment
-                    </p>
-                    <p className="font-medium">
-                      {customer.customerSegment || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Org. nummer</p>
-                    <p className="font-medium">{customer.orgNumber || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">NPS Score</p>
-                    <p className="font-medium">
-                      {customer.npsScore !== null ? customer.npsScore : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Sist gjennomgått
-                    </p>
-                    <p className="font-medium">
-                      {formatDate(customer.lastReviewDate)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+          {/* Additional Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tilleggsinformasjon</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Kundesegment</p>
+                <p className="font-medium">{customer.customerSegment || "-"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Org. nummer</p>
+                <p className="font-medium">{customer.orgNumber || "-"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">NPS Score</p>
+                <p className="font-medium">
+                  {customer.npsScore !== null ? customer.npsScore : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Sist gjennomgått
+                </p>
+                <p className="font-medium">
+                  {formatDate(customer.lastReviewDate)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs for Contacts, Activities, SMS, etc. */}
+        <Suspense
+          fallback={
+            <div className="mt-6">
+              <Skeleton className="h-[300px] w-full" />
             </div>
-
-            {/* Tabs for Contacts, Activities, SMS, etc. */}
-            <CustomerTabs customer={customer} />
-          </>
-        ) : null}
+          }
+        >
+          <CustomerTabs customer={customer} />
+        </Suspense>
       </main>
     </>
   );
