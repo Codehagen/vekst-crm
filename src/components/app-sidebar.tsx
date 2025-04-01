@@ -29,13 +29,9 @@ import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import { NavDocuments } from "./nav-documents";
 import { NavSecondary } from "./nav-secondary";
+import { useSession } from "@/lib/auth/client";
 
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -96,6 +92,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { data: session, isPending } = useSession();
 
   // Function to check if a path is active
   const isActivePath = (path: string) => {
@@ -142,7 +139,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={navSecondaryWithActive} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        {isPending ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg">
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+                <div className="grid flex-1 text-left text-sm leading-tight gap-1.5">
+                  <div className="h-3.5 w-20 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-24 animate-pulse rounded bg-muted opacity-70" />
+                </div>
+                <div className="ml-auto h-4 w-4 animate-pulse rounded bg-muted" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : (
+          <NavUser
+            user={{
+              name: session?.user?.name || "Guest",
+              email: session?.user?.email || "",
+              avatar: session?.user?.image || "",
+            }}
+          />
+        )}
       </SidebarFooter>
     </Sidebar>
   );

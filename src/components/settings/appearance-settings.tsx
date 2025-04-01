@@ -1,15 +1,29 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Switch } from "@/components/ui/switch"
-import { Moon, Sun, Monitor } from "lucide-react"
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
+import { Moon, Sun, Monitor } from "lucide-react";
 
 const appearanceFormSchema = z.object({
   theme: z.enum(["light", "dark", "system"], {
@@ -20,9 +34,9 @@ const appearanceFormSchema = z.object({
   }),
   compactMode: z.boolean().default(false),
   reducedMotion: z.boolean().default(false),
-})
+});
 
-type AppearanceFormValues = z.infer<typeof appearanceFormSchema>
+type AppearanceFormValues = z.infer<typeof appearanceFormSchema>;
 
 // This can come from your database or API.
 const defaultValues: Partial<AppearanceFormValues> = {
@@ -30,31 +44,33 @@ const defaultValues: Partial<AppearanceFormValues> = {
   fontSize: "md",
   compactMode: false,
   reducedMotion: false,
-}
+};
 
 export function AppearanceSettings() {
-  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const form = useForm<AppearanceFormValues>({
     resolver: zodResolver(appearanceFormSchema),
     defaultValues,
-  })
+  });
 
   function onSubmit(data: AppearanceFormValues) {
-    setIsLoading(true)
+    setIsLoading(true);
 
     // Simulate API call
     setTimeout(() => {
-      console.log(data)
-      setIsLoading(false)
-    }, 1000)
+      console.log(data);
+      setIsLoading(false);
+    }, 1000);
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
-        <CardDescription>Customize how the CRM looks and feels.</CardDescription>
+        <CardDescription>
+          Customize how the CRM looks and feels.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -65,7 +81,9 @@ export function AppearanceSettings() {
               render={({ field }) => (
                 <FormItem className="space-y-4">
                   <FormLabel>Theme</FormLabel>
-                  <FormDescription>Select the theme for your dashboard.</FormDescription>
+                  <FormDescription>
+                    Select the theme for your dashboard.
+                  </FormDescription>
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
@@ -97,7 +115,10 @@ export function AppearanceSettings() {
                       <FormItem>
                         <FormLabel className="[&:has([data-state=checked])>div]:border-primary">
                           <FormControl>
-                            <RadioGroupItem value="system" className="sr-only" />
+                            <RadioGroupItem
+                              value="system"
+                              className="sr-only"
+                            />
                           </FormControl>
                           <div className="items-center rounded-md border-2 border-muted p-4 hover:border-accent flex flex-col gap-2">
                             <Monitor className="h-5 w-5" />
@@ -118,9 +139,15 @@ export function AppearanceSettings() {
               render={({ field }) => (
                 <FormItem className="space-y-4">
                   <FormLabel>Font Size</FormLabel>
-                  <FormDescription>Select the font size for the interface.</FormDescription>
+                  <FormDescription>
+                    Select the font size for the interface.
+                  </FormDescription>
                   <FormControl>
-                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4">
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="flex gap-4"
+                    >
                       <FormItem className="flex items-center space-x-3 space-y-0">
                         <FormControl>
                           <RadioGroupItem value="sm" />
@@ -154,10 +181,16 @@ export function AppearanceSettings() {
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Compact Mode</FormLabel>
-                      <FormDescription>Reduce the spacing between elements for a more compact view.</FormDescription>
+                      <FormDescription>
+                        Reduce the spacing between elements for a more compact
+                        view.
+                      </FormDescription>
                     </div>
                     <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
                     </FormControl>
                   </FormItem>
                 )}
@@ -168,11 +201,18 @@ export function AppearanceSettings() {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Reduced Motion</FormLabel>
-                      <FormDescription>Minimize animations for accessibility purposes.</FormDescription>
+                      <FormLabel className="text-base">
+                        Reduced Motion
+                      </FormLabel>
+                      <FormDescription>
+                        Minimize animations for accessibility purposes.
+                      </FormDescription>
                     </div>
                     <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
                     </FormControl>
                   </FormItem>
                 )}
@@ -188,6 +228,5 @@ export function AppearanceSettings() {
         </Form>
       </CardContent>
     </Card>
-  )
+  );
 }
-
