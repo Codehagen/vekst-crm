@@ -287,6 +287,14 @@ export const businessService = {
       orderBy: {
         name: "asc",
       },
+      include: {
+        contacts: {
+          where: {
+            isPrimary: true,
+          },
+          take: 1,
+        },
+      },
     });
   },
 

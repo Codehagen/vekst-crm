@@ -219,7 +219,16 @@ async function refreshMicrosoftToken(refreshToken: string) {
     client_secret: process.env.MICROSOFT_CLIENT_SECRET as string,
     refresh_token: refreshToken,
     grant_type: "refresh_token",
-    scope: "openid email profile https://graph.microsoft.com/Mail.Send",
+    scope: [
+      "openid",
+      "email",
+      "profile",
+      "offline_access",
+      "https://graph.microsoft.com/Mail.Read",
+      "https://graph.microsoft.com/Mail.ReadWrite",
+      "https://graph.microsoft.com/Mail.Send",
+      "https://graph.microsoft.com/User.Read",
+    ].join(" "),
   });
 
   const response = await fetch(tokenEndpoint, {
@@ -604,7 +613,7 @@ export async function syncEmails(params: SyncEmailsParams = {}) {
     }
 
     // Get the user with email provider
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: { emailProvider: true },
     });
@@ -615,6 +624,29 @@ export async function syncEmails(params: SyncEmailsParams = {}) {
 
     if (!user.emailProvider) {
       throw new Error("No email provider connected");
+    }
+
+    // Check if token is expired and refresh if needed
+    if (
+      user.emailProvider.expiresAt &&
+      new Date(user.emailProvider.expiresAt) < new Date()
+    ) {
+      console.log("Access token expired, refreshing token");
+      // Need to refresh the token
+      await refreshEmailProviderToken(user.emailProvider.id);
+
+      // Fetch the updated provider with refreshed token
+      const updatedUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        include: { emailProvider: true },
+      });
+
+      if (!updatedUser || !updatedUser.emailProvider) {
+        throw new Error("Failed to refresh email provider token");
+      }
+
+      // Update the user object with refreshed provider
+      user = updatedUser;
     }
 
     // Parse parameters
@@ -855,4 +887,133 @@ export async function associateEmailsWithBusiness(
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }
+}
+
+/**
+ * Fetch all emails related to a business and its contacts
+ * This provides a consolidated view of all communication with a business
+ */
+export async function fetchBusinessEmails(
+  businessId: string,
+  options: {
+    limit?: number;
+    orderBy?: "sentAt" | "receivedAt";
+    orderDirection?: "asc" | "desc";
+  } = {}
+) {
+  try {
+    // Verify authentication
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get the business with contacts to ensure it exists
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      include: {
+        contacts: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    });
+
+    if (!business) {
+      throw new Error("Business not found");
+    }
+
+    // Collect all contact IDs from the business
+    const contactIds = business.contacts.map((contact) => contact.id);
+
+    // Set default options
+    const { limit = 50, orderBy = "sentAt", orderDirection = "desc" } = options;
+
+    // Query emails directly associated with business or any of its contacts
+    // This uses a more complex where condition to get a unified view
+    const emails = await prisma.emailSync.findMany({
+      where: {
+        userId: user.id,
+        isDeleted: false,
+        OR: [
+          { businessId },
+          { contactId: { in: contactIds.length > 0 ? contactIds : undefined } },
+          // Also include emails matching the domain of the business email
+          ...(business.email
+            ? [
+                {
+                  fromEmail: {
+                    endsWith: `@${extractDomainFromEmail(business.email)}`,
+                  },
+                },
+              ]
+            : []),
+          // Also include emails to/from any contact email addresses
+          ...(business.contacts.length > 0
+            ? [
+                {
+                  OR: business.contacts
+                    .filter((c) => c.email)
+                    .map((contact) => ({
+                      OR: [
+                        { fromEmail: contact.email },
+                        { toEmail: { has: contact.email } },
+                      ],
+                    })),
+                },
+              ]
+            : []),
+        ],
+      },
+      orderBy: {
+        [orderBy]: orderDirection,
+      },
+      take: limit,
+      include: {
+        business: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      emails,
+      businessName: business.name,
+      contactCount: business.contacts.length,
+    };
+  } catch (error) {
+    console.error("Error fetching business emails:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Helper to extract domain from email
+ */
+function extractDomainFromEmail(email: string): string | null {
+  if (!email) return null;
+  const match = email.match(/@([^@]+)$/);
+  return match ? match[1] : null;
 }

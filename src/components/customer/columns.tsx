@@ -57,17 +57,33 @@ export const columns: ColumnDef<Business>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const name = row.getValue("name") as string;
+      const businessName = row.getValue("name") as string;
       const id = row.original.id;
 
+      // Get the primary contact or contactPerson
+      const contacts = (row.original as any).contacts;
+      const primaryContact = contacts?.[0];
+      const contactPerson = row.original.contactPerson;
+
+      // Determine the display name - prioritize primary contact's name,
+      // then fall back to contactPerson field, then business name
+      const displayName = primaryContact?.name || contactPerson || businessName;
+
       return (
-        <Link
-          href={`/customers/${id}`}
-          className="font-medium text-primary hover:underline flex items-center gap-1"
-        >
-          {name}
-          <ExternalLink className="h-3 w-3 inline opacity-50" />
-        </Link>
+        <div>
+          <Link
+            href={`/customers/${id}`}
+            className="font-medium text-primary hover:underline flex items-center gap-1"
+          >
+            {displayName}
+            <ExternalLink className="h-3 w-3 inline opacity-50" />
+          </Link>
+          {displayName !== businessName && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {businessName}
+            </div>
+          )}
+        </div>
       );
     },
   },
@@ -79,6 +95,33 @@ export const columns: ColumnDef<Business>[] = [
   {
     accessorKey: "phone",
     header: "Telefon",
+  },
+  {
+    id: "primaryContact",
+    header: "Selskap",
+    cell: ({ row }) => {
+      // The business object now includes contacts from our updated query
+      const contacts = (row.original as any).contacts;
+      const primaryContact = contacts?.[0];
+      const businessId = row.original.id;
+      const businessName = row.getValue("name") as string;
+
+      return (
+        <div>
+          <Link
+            href={`/businesses/${businessId}`}
+            className="text-primary hover:underline"
+          >
+            {businessName}
+          </Link>
+          {primaryContact && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {primaryContact.name}
+            </div>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "customerSince",
