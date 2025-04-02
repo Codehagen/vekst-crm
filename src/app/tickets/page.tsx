@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
 import { TicketDataTable } from "@/components/ticket/ticket-data-table";
-import { getTickets } from "@/lib/actions/ticket-actions";
+import { getTickets } from "@/app/actions/tickets";
 
 export default async function TicketsPage() {
-  // Get real ticket data from the database
+  // Get all tickets for the current user's workspace
   const tickets = await getTickets();
 
   return (

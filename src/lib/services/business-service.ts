@@ -30,6 +30,7 @@ export interface CreateBusinessInput {
   stage: CustomerStage;
   potensiellVerdi?: number;
   tags?: string[];
+  // Don't include workspaceId in the input - will be set from current user
 }
 
 export interface UpdateBusinessInput {
@@ -51,6 +52,7 @@ export interface UpdateBusinessInput {
   stage?: CustomerStage;
   bilagCount?: number;
   potensiellVerdi?: number | null;
+  // Don't allow updating workspaceId directly
 }
 
 // Business with related data
@@ -63,10 +65,11 @@ export interface BusinessWithRelations extends Business {
 
 export const businessService = {
   /**
-   * Get all businesses
+   * Get all businesses within a workspace
    */
-  getAllBusinesses: async (): Promise<Business[]> => {
+  getAllBusinesses: async (workspaceId: string): Promise<Business[]> => {
     return prisma.business.findMany({
+      where: { workspaceId },
       orderBy: {
         name: "asc",
       },
@@ -74,11 +77,17 @@ export const businessService = {
   },
 
   /**
-   * Get businesses by stage
+   * Get businesses by stage within a workspace
    */
-  getBusinessesByStage: async (stage: CustomerStage): Promise<Business[]> => {
+  getBusinessesByStage: async (
+    stage: CustomerStage,
+    workspaceId: string
+  ): Promise<Business[]> => {
     return prisma.business.findMany({
-      where: { stage },
+      where: {
+        stage,
+        workspaceId,
+      },
       orderBy: {
         createdAt: "desc",
       },
@@ -86,11 +95,27 @@ export const businessService = {
   },
 
   /**
-   * Get leads (businesses at early stages: lead, prospect, qualified)
+   * Get customers within a workspace
    */
-  getLeads: async (): Promise<Business[]> => {
+  getCustomers: async (workspaceId: string): Promise<Business[]> => {
     return prisma.business.findMany({
       where: {
+        stage: CustomerStage.customer,
+        workspaceId,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+  },
+
+  /**
+   * Get leads (businesses at early stages) within a workspace
+   */
+  getLeads: async (workspaceId: string): Promise<Business[]> => {
+    return prisma.business.findMany({
+      where: {
+        workspaceId,
         stage: {
           in: [
             CustomerStage.lead,
@@ -106,13 +131,17 @@ export const businessService = {
   },
 
   /**
-   * Get a business by ID with all related data
+   * Get a business by ID within a workspace
    */
   getBusinessById: async (
-    id: string
+    id: string,
+    workspaceId: string
   ): Promise<BusinessWithRelations | null> => {
-    return prisma.business.findUnique({
-      where: { id },
+    return prisma.business.findFirst({
+      where: {
+        id,
+        workspaceId,
+      },
       include: {
         contacts: true,
         activities: {
@@ -134,10 +163,11 @@ export const businessService = {
   },
 
   /**
-   * Create a new business
+   * Create a new business within a workspace
    */
   createBusiness: async (
-    businessData: CreateBusinessInput
+    businessData: CreateBusinessInput,
+    workspaceId: string
   ): Promise<Business> => {
     const { tags, ...rest } = businessData;
 
@@ -153,6 +183,9 @@ export const businessService = {
     return prisma.business.create({
       data: {
         ...rest,
+        workspace: {
+          connect: { id: workspaceId },
+        },
         // Connect or create tags
         tags: tagsData,
       },
@@ -160,12 +193,26 @@ export const businessService = {
   },
 
   /**
-   * Update a business
+   * Update a business within a workspace
    */
   updateBusiness: async (
     id: string,
-    data: UpdateBusinessInput
+    data: UpdateBusinessInput,
+    workspaceId: string
   ): Promise<Business> => {
+    // First verify business belongs to workspace
+    const business = await prisma.business.findFirst({
+      where: {
+        id,
+        workspaceId,
+      },
+      select: { id: true },
+    });
+
+    if (!business) {
+      throw new Error("Business not found in workspace");
+    }
+
     return prisma.business.update({
       where: { id },
       data,
@@ -173,12 +220,26 @@ export const businessService = {
   },
 
   /**
-   * Update business stage - used for lifecycle changes (e.g., lead to customer)
+   * Update business stage within a workspace
    */
   updateBusinessStage: async (
     id: string,
-    stage: CustomerStage
+    stage: CustomerStage,
+    workspaceId: string
   ): Promise<Business> => {
+    // First verify business belongs to workspace
+    const business = await prisma.business.findFirst({
+      where: {
+        id,
+        workspaceId,
+      },
+      select: { id: true },
+    });
+
+    if (!business) {
+      throw new Error("Business not found in workspace");
+    }
+
     return prisma.business.update({
       where: { id },
       data: { stage },
@@ -186,9 +247,25 @@ export const businessService = {
   },
 
   /**
-   * Delete a business
+   * Delete a business within a workspace
    */
-  deleteBusiness: async (id: string): Promise<Business> => {
+  deleteBusiness: async (
+    id: string,
+    workspaceId: string
+  ): Promise<Business> => {
+    // First verify business belongs to workspace
+    const business = await prisma.business.findFirst({
+      where: {
+        id,
+        workspaceId,
+      },
+      select: { id: true },
+    });
+
+    if (!business) {
+      throw new Error("Business not found in workspace");
+    }
+
     return prisma.business.delete({
       where: { id },
     });
@@ -272,28 +349,6 @@ export const businessService = {
       include: {
         items: true,
         contact: true,
-      },
-    });
-  },
-
-  /**
-   * Get customers (businesses at customer stage)
-   */
-  getCustomers: async (): Promise<Business[]> => {
-    return prisma.business.findMany({
-      where: {
-        stage: CustomerStage.customer,
-      },
-      orderBy: {
-        name: "asc",
-      },
-      include: {
-        contacts: {
-          where: {
-            isPrimary: true,
-          },
-          take: 1,
-        },
       },
     });
   },

@@ -104,33 +104,14 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
+import { Ticket } from "@/app/actions/tickets";
+
 import {
-  Ticket,
   assignTicket,
   updateTicketStatus,
   addTicketComment,
-} from "@/lib/actions/ticket-actions";
-
-// Define the ticket schema for client-side validation
-export const ticketSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string(),
-  status: z.string(),
-  priority: z.string(),
-  businessName: z.string().nullable(),
-  contactName: z.string().nullable(),
-  assignee: z.string().nullable(),
-  creator: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  dueDate: z.date().nullable(),
-  tags: z.array(z.string()),
-  commentCount: z.number().default(0),
-});
-
-// Use the imported Ticket type instead of the schema inference
-// export type Ticket = z.infer<typeof ticketSchema>
+} from "@/app/actions/tickets";
+import { UserAssignSelect } from "./user-assign-select";
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: string }) {
@@ -254,28 +235,10 @@ const columns: ColumnDef<Ticket>[] = [
       }
 
       return (
-        <>
-          <Label htmlFor={`${row.original.id}-assignee`} className="sr-only">
-            Assignee
-          </Label>
-          <Select
-            onValueChange={(value) =>
-              handleTicketAssignee(row.original.id, value)
-            }
-          >
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              id={`${row.original.id}-assignee`}
-            >
-              <SelectValue placeholder="Assign ticket" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="user123">John Doe</SelectItem>
-              <SelectItem value="user456">Jane Smith</SelectItem>
-              <SelectItem value="user789">Alex Johnson</SelectItem>
-            </SelectContent>
-          </Select>
-        </>
+        <UserAssignSelect
+          ticketId={row.original.id}
+          onAssign={handleTicketAssignee}
+        />
       );
     },
   },
@@ -355,14 +318,11 @@ async function handleAddComment(ticketId: string, content: string) {
     return;
   }
 
-  toast.promise(
-    addTicketComment(ticketId, content, "current-user", false), // Replace "current-user" with actual user ID
-    {
-      loading: "Adding comment...",
-      success: "Comment added successfully",
-      error: "Failed to add comment",
-    }
-  );
+  toast.promise(addTicketComment(ticketId, content, undefined, false), {
+    loading: "Adding comment...",
+    success: "Comment added successfully",
+    error: "Failed to add comment",
+  });
 }
 
 function DraggableRow({ row }: { row: Row<Ticket> }) {
@@ -794,16 +754,10 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
               </div>
               <div className="flex flex-col gap-3">
                 <Label htmlFor="assignee">Assignee</Label>
-                <Select defaultValue={ticket.assignee || ""}>
-                  <SelectTrigger id="assignee" className="w-full">
-                    <SelectValue placeholder="Assign ticket" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user123">John Doe</SelectItem>
-                    <SelectItem value="user456">Jane Smith</SelectItem>
-                    <SelectItem value="user789">Alex Johnson</SelectItem>
-                  </SelectContent>
-                </Select>
+                <UserAssignSelect
+                  ticketId={ticket.id}
+                  onAssign={handleTicketAssignee}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-3">
