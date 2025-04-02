@@ -14,6 +14,8 @@ import {
   IconHelp,
   IconSearch,
   IconUserCircle,
+  IconBuildingSkyscraper,
+  IconAd,
 } from "@tabler/icons-react";
 
 import {
@@ -47,6 +49,11 @@ const data = {
       title: "Kunder",
       url: "/customers",
       icon: IconUserCircle,
+    },
+    {
+      title: "Bedrifter",
+      url: "/businesses",
+      icon: IconBuildingSkyscraper,
     },
     {
       title: "Annonser",
