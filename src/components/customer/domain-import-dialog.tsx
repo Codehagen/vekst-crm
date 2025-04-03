@@ -28,6 +28,7 @@ import {
   Globe,
   Database,
   Info,
+  FolderOpen,
 } from "lucide-react";
 import { importBusinessesFromDomains } from "@/app/actions/customer";
 import { syncEmails } from "@/app/actions/email";
@@ -40,6 +41,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface DomainImportDialogProps {
   open: boolean;
@@ -64,12 +80,20 @@ export function DomainImportDialog({
   const [needsSync, setNeedsSync] = useState(false);
   const [checkingEmailStatus, setCheckingEmailStatus] = useState(true);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [availableFolders, setAvailableFolders] = useState<string[]>([
+    "Inbox",
+    "Sent",
+    "Archive",
+    "Important",
+  ]);
 
   // Import settings
   const [skipExistingDomains, setSkipExistingDomains] = useState(true);
   const [importAsLeads, setImportAsLeads] = useState(true);
   const [transformDomains, setTransformDomains] = useState(true);
   const [skipFilters, setSkipFilters] = useState(false);
+  const [selectedFolders, setSelectedFolders] = useState<string[]>(["Inbox"]);
+  const [minEmailCount, setMinEmailCount] = useState(2);
 
   // Check email status on load
   useEffect(() => {
@@ -105,6 +129,8 @@ export function DomainImportDialog({
       } else {
         setEmailCount(status.emailCount || 0);
         setNeedsSync(false);
+        // In a real implementation, we would fetch available folders here
+        // setAvailableFolders(status.folders || []);
       }
     } catch (error) {
       setError("Failed to check email status.");
@@ -128,7 +154,10 @@ export function DomainImportDialog({
     }, 1000);
 
     try {
-      const result = await syncEmails({ maxEmails: 500 });
+      const result = await syncEmails({
+        maxEmails: 500,
+        folders: selectedFolders,
+      });
       if (result.success) {
         setProgress(100);
         await checkEmailStatus();
@@ -143,6 +172,17 @@ export function DomainImportDialog({
       clearInterval(progressInterval);
       setIsSyncing(false);
     }
+  };
+
+  // Toggle folder selection
+  const toggleFolder = (folder: string) => {
+    setSelectedFolders((current) => {
+      if (current.includes(folder)) {
+        return current.filter((f) => f !== folder);
+      } else {
+        return [...current, folder];
+      }
+    });
   };
 
   // Generate preview data
@@ -210,6 +250,8 @@ export function DomainImportDialog({
         importAsLeads,
         transformDomains,
         skipFilters,
+        folders: selectedFolders,
+        minEmailCount,
       });
 
       setImportResult(result);
@@ -330,9 +372,33 @@ export function DomainImportDialog({
                   We need to sync your emails before we can import businesses
                   from domains.
                 </p>
+
+                <div className="mb-4 p-3 border rounded-md">
+                  <Label className="mb-2 block text-sm font-medium">
+                    Select email folders to sync:
+                  </Label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {availableFolders.map((folder) => (
+                      <div key={folder} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`folder-${folder}`}
+                          checked={selectedFolders.includes(folder)}
+                          onCheckedChange={() => toggleFolder(folder)}
+                        />
+                        <Label
+                          htmlFor={`folder-${folder}`}
+                          className="font-normal"
+                        >
+                          {folder}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <Button
                   onClick={handleSyncEmails}
-                  disabled={isSyncing}
+                  disabled={isSyncing || selectedFolders.length === 0}
                   className="w-full"
                 >
                   {isSyncing ? (
@@ -379,7 +445,101 @@ export function DomainImportDialog({
                 <div className="space-y-4 border p-4 rounded-md">
                   <h3 className="text-sm font-medium">Import Settings</h3>
 
-                  <div className="space-y-3">
+                  <div className="space-y-5">
+                    <div className="space-y-3">
+                      <Label htmlFor="emailFolders" className="text-sm">
+                        Email folders to analyze
+                      </Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-between"
+                          >
+                            <div className="flex items-center">
+                              <FolderOpen className="mr-2 h-4 w-4" />
+                              <span>
+                                {selectedFolders.length === 0
+                                  ? "Select folders"
+                                  : selectedFolders.length === 1
+                                  ? `1 folder selected`
+                                  : `${selectedFolders.length} folders selected`}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {selectedFolders.length > 0 &&
+                                selectedFolders.join(", ")}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56">
+                          <div className="space-y-2">
+                            {availableFolders.map((folder) => (
+                              <div
+                                key={folder}
+                                className="flex items-center space-x-2"
+                              >
+                                <Checkbox
+                                  id={`folder-select-${folder}`}
+                                  checked={selectedFolders.includes(folder)}
+                                  onCheckedChange={() => toggleFolder(folder)}
+                                />
+                                <Label
+                                  htmlFor={`folder-select-${folder}`}
+                                  className="font-normal"
+                                >
+                                  {folder}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="minEmails" className="text-sm">
+                          Minimum emails from domain
+                        </Label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">
+                                Only create businesses from domains with at
+                                least this many emails
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Select
+                          value={minEmailCount.toString()}
+                          onValueChange={(value) =>
+                            setMinEmailCount(parseInt(value))
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select threshold" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectLabel>Email count threshold</SelectLabel>
+                              <SelectItem value="1">1 email</SelectItem>
+                              <SelectItem value="2">2 emails</SelectItem>
+                              <SelectItem value="3">3 emails</SelectItem>
+                              <SelectItem value="5">5 emails</SelectItem>
+                              <SelectItem value="10">10 emails</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
                     <TooltipProvider>
                       <div className="flex items-center space-x-2">
                         <Checkbox

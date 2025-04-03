@@ -47,6 +47,14 @@ export async function importCustomersFromEmailsAction(
       };
     }
 
+    // Log import start with options
+    console.log(`Starting email import with options:`, {
+      minEmailCount: options.minEmailCount,
+      skipExistingDomains: options.skipExistingDomains,
+      importLeadsOnly: options.importLeadsOnly,
+      maxResults: options.maxResults,
+    });
+
     // Run the import process with workspace ID
     const importStats = await importCustomersFromEmails(
       user.id,
@@ -59,9 +67,24 @@ export async function importCustomersFromEmailsAction(
     revalidatePath("/leads");
     revalidatePath("/customers");
 
+    // Get summary of filtered domains for debugging
+    const domainSummary = Object.entries(importStats.filteredDomains || {})
+      .sort((a, b) => b[1] - a[1]) // Sort by count descending
+      .slice(0, 10) // Take top 10
+      .map(([domain, count]) => `${domain}: ${count}`);
+
+    console.log(`Import completed. Top domains found:`, domainSummary);
+
     return {
       success: true,
       stats: importStats,
+      debug: {
+        validEmails: importStats.validEmails,
+        filteredEmails: importStats.filteredEmails,
+        personalEmails: importStats.personalEmails,
+        businessEmails: importStats.businessEmails,
+        topDomains: domainSummary,
+      },
     };
   } catch (error) {
     console.error("Error importing customers from emails:", error);

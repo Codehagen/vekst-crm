@@ -156,6 +156,36 @@ export function ImportEmailWizard({
     router.push("/settings/email");
   };
 
+  // Generate debug report text
+  const getDebugReport = () => {
+    if (!importResult?.debug) return null;
+
+    const debug = importResult.debug;
+    return (
+      <div className="mt-4 p-4 bg-muted/50 rounded-md text-xs text-muted-foreground">
+        <h4 className="text-sm font-medium mb-2">Debug Information</h4>
+        <p>• Emails scanned: {debug.validEmails + debug.filteredEmails}</p>
+        <p>• Valid emails: {debug.validEmails}</p>
+        <p>• Filtered emails: {debug.filteredEmails}</p>
+        <p>• Personal emails: {debug.personalEmails}</p>
+        <p>• Business emails: {debug.businessEmails}</p>
+
+        {debug.topDomains?.length > 0 && (
+          <>
+            <h5 className="text-xs font-medium mt-2 mb-1">
+              Top domains found:
+            </h5>
+            <ul className="pl-4 list-disc">
+              {debug.topDomains.map((domain, i) => (
+                <li key={i}>{domain}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
@@ -403,6 +433,9 @@ export function ImportEmailWizard({
                     </AlertDescription>
                   </Alert>
                 )}
+
+                {/* Add debug information when available */}
+                {getDebugReport()}
               </div>
             )}
           </TabsContent>

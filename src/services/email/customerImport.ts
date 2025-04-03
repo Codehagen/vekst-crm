@@ -8,6 +8,11 @@ interface ImportStats {
   skippedBusinesses: number;
   associatedEmails: number;
   errors: string[];
+  filteredEmails: number;
+  validEmails: number;
+  personalEmails: number;
+  businessEmails: number;
+  filteredDomains: { [domain: string]: number };
 }
 
 interface ImportOptions {
@@ -41,9 +46,16 @@ export async function importCustomersFromEmails(
     skippedBusinesses: 0,
     associatedEmails: 0,
     errors: [],
+    filteredEmails: 0,
+    validEmails: 0,
+    personalEmails: 0,
+    businessEmails: 0,
+    filteredDomains: {},
   };
 
   try {
+    console.log(`Starting email scan for user ${userId}`);
+
     // 1. Get count of unassociated emails
     const emailCount = await prisma.emailSync.count({
       where: {
@@ -53,6 +65,7 @@ export async function importCustomersFromEmails(
     });
 
     stats.totalEmails = emailCount;
+    console.log(`Found ${emailCount} unassociated emails to process`);
 
     if (emailCount === 0) {
       return stats;
@@ -80,8 +93,10 @@ export async function importCustomersFromEmails(
 
       if (emails.length === 0) break; // No more emails to process
 
+      console.log(`Processing chunk of ${emails.length} emails`);
+
       // Extract contacts from this chunk
-      const chunkContacts = extractContactsFromEmails(emails);
+      const chunkContacts = extractContactsFromEmails(emails, stats);
 
       // Merge into main contact map
       for (const [email, data] of Object.entries(chunkContacts)) {
@@ -98,7 +113,10 @@ export async function importCustomersFromEmails(
       }
 
       processedEmails += emails.length;
+      console.log(`Processed ${processedEmails}/${emailCount} emails so far`);
     }
+
+    console.log(`Total extracted contacts: ${Object.keys(contactMap).length}`);
 
     // 3. Get existing businesses to avoid duplicates
     const existingBusinesses = await prisma.business.findMany({
@@ -111,6 +129,10 @@ export async function importCustomersFromEmails(
       },
     });
 
+    console.log(
+      `Found ${existingBusinesses.length} existing businesses to avoid duplicates`
+    );
+
     const existingEmails = new Set(
       existingBusinesses.map((b) => b.email.toLowerCase())
     );
@@ -122,23 +144,46 @@ export async function importCustomersFromEmails(
         )
       : new Set();
 
+    console.log(
+      `Existing emails: ${existingEmails.size}, Existing domains to skip: ${existingDomains.size}`
+    );
+
     // 4. Filter and sort contacts by frequency
     const potentialCustomers = Object.entries(contactMap)
       .filter(([email, data]) => {
         // Skip if the exact email already exists
-        if (existingEmails.has(email.toLowerCase())) return false;
+        if (existingEmails.has(email.toLowerCase())) {
+          console.log(`Skipping ${email}: Email already exists in businesses`);
+          return false;
+        }
 
         // Skip if the domain already exists and option is enabled
         const domain = extractDomainFromEmail(email);
-        if (domain && existingDomains.has(domain)) return false;
+        if (domain && existingDomains.has(domain)) {
+          console.log(`Skipping ${email}: Domain ${domain} already exists`);
+          return false;
+        }
 
         // Skip if below minimum email count
-        return data.count >= minEmailCount;
+        if (data.count < minEmailCount) {
+          console.log(
+            `Skipping ${email}: Only ${data.count} emails (min: ${minEmailCount})`
+          );
+          return false;
+        }
+
+        console.log(
+          `Keeping ${email}: Has ${data.count} emails and meets criteria`
+        );
+        return true;
       })
       .sort((a, b) => b[1].count - a[1].count) // Sort by email count descending
       .slice(0, maxResults);
 
     stats.processedContacts = potentialCustomers.length;
+    console.log(
+      `After filtering, found ${potentialCustomers.length} potential contacts to process`
+    );
 
     // 5. Create businesses for potential customers
     for (const [email, data] of potentialCustomers) {
@@ -163,6 +208,18 @@ export async function importCustomersFromEmails(
           ? personalEmailDomains.includes(domain.toLowerCase())
           : false;
 
+        if (isPersonalEmail) {
+          stats.personalEmails++;
+          console.log(
+            `Creating personal contact for ${email} - ${
+              data.name || "Unknown name"
+            }`
+          );
+        } else {
+          stats.businessEmails++;
+          console.log(`Creating business for ${email} - ${domain}`);
+        }
+
         // Generate appropriate notes based on type of email
         const notes = isPersonalEmail
           ? `Automatically created from personal email contact. Found in ${data.count} emails.`
@@ -183,6 +240,10 @@ export async function importCustomersFromEmails(
           },
         });
 
+        console.log(
+          `Created business ID: ${newBusiness.id} - Name: ${newBusiness.name}`
+        );
+
         // Create a contact if we have a name
         if (data.name) {
           await prisma.contact.create({
@@ -194,6 +255,7 @@ export async function importCustomersFromEmails(
               businessId: newBusiness.id,
             },
           });
+          console.log(`Created contact for ${data.name} <${email}>`);
         }
 
         // Associate all relevant emails with this new business
@@ -206,11 +268,15 @@ export async function importCustomersFromEmails(
             data: { businessId: newBusiness.id },
           });
           stats.associatedEmails += batchIds.length;
+          console.log(
+            `Associated ${batchIds.length} emails with ${newBusiness.name}`
+          );
         }
 
         stats.createdBusinesses++;
       } catch (error) {
         stats.skippedBusinesses++;
+        console.error(`Failed to create business for ${email}:`, error);
         stats.errors.push(
           `Failed to create business for ${email}: ${
             error instanceof Error ? error.message : "Unknown error"
@@ -219,8 +285,22 @@ export async function importCustomersFromEmails(
       }
     }
 
+    console.log("Import completed with stats:", {
+      totalEmails: stats.totalEmails,
+      validEmails: stats.validEmails,
+      filteredEmails: stats.filteredEmails,
+      personalEmails: stats.personalEmails,
+      businessEmails: stats.businessEmails,
+      processedContacts: stats.processedContacts,
+      createdBusinesses: stats.createdBusinesses,
+      skippedBusinesses: stats.skippedBusinesses,
+      associatedEmails: stats.associatedEmails,
+      errors: stats.errors.length,
+    });
+
     return stats;
   } catch (error) {
+    console.error("Error during import process:", error);
     stats.errors.push(
       `Import process failed: ${
         error instanceof Error ? error.message : "Unknown error"
@@ -234,19 +314,32 @@ export async function importCustomersFromEmails(
  * Extracts contact information from a collection of emails
  */
 function extractContactsFromEmails(
-  emails: EmailSync[]
+  emails: EmailSync[],
+  stats?: ImportStats
 ): Record<string, { name: string | null; count: number; emailIds: string[] }> {
   const contacts: Record<
     string,
     { name: string | null; count: number; emailIds: string[] }
   > = {};
 
+  let validCount = 0;
+  let filteredCount = 0;
+  const domainCounts: Record<string, number> = {};
+
   for (const email of emails) {
     // Process "From" email addresses
     const fromEmail = email.fromEmail;
     const fromName = email.fromName;
+    const domain = extractDomainFromEmail(fromEmail);
+
+    // Track domain statistics
+    if (domain && stats) {
+      if (!domainCounts[domain]) domainCounts[domain] = 0;
+      domainCounts[domain]++;
+    }
 
     if (fromEmail && isValidEmailForImport(fromEmail)) {
+      validCount++;
       if (!contacts[fromEmail]) {
         contacts[fromEmail] = {
           name: fromName || null,
@@ -262,6 +355,8 @@ function extractContactsFromEmails(
       if (!contacts[fromEmail].name && fromName) {
         contacts[fromEmail].name = fromName;
       }
+    } else if (fromEmail) {
+      filteredCount++;
     }
 
     // We could also process "To", "CC", etc. but that could create too many leads
@@ -275,14 +370,28 @@ function extractContactsFromEmails(
     */
   }
 
+  if (stats) {
+    stats.validEmails += validCount;
+    stats.filteredEmails += filteredCount;
+    stats.filteredDomains = { ...stats.filteredDomains, ...domainCounts };
+    console.log(
+      `Processed ${emails.length} emails: Valid: ${validCount}, Filtered: ${filteredCount}`
+    );
+    console.log(
+      `Found ${Object.keys(contacts).length} unique contacts in this batch`
+    );
+  }
+
   return contacts;
 }
 
 /**
  * Checks if an email is valid for import consideration
+ * This version is more permissive for debugging purposes.
+ * It still filters out system addresses but allows personal emails.
  */
 function isValidEmailForImport(email: string): boolean {
-  // Skip common no-reply, support, info emails
+  // Skip common no-reply, support, info emails (keep this filter)
   const skipPatterns = [
     /noreply|no-reply|donotreply/i,
     /^info@|^support@|^contact@|^hello@|^admin@/i,
@@ -291,9 +400,17 @@ function isValidEmailForImport(email: string): boolean {
   ];
 
   for (const pattern of skipPatterns) {
-    if (pattern.test(email)) return false;
+    if (pattern.test(email)) {
+      console.log(`Filtered email by pattern: ${email} (matches ${pattern})`);
+      return false;
+    }
   }
 
+  // FOR DEBUGGING: Allow all other emails including personal domains
+  return true;
+
+  /* 
+  // NOTE: Original filtering code - commented out for debugging
   // Skip common email services
   const skipDomains = [
     "gmail.com",
@@ -315,6 +432,7 @@ function isValidEmailForImport(email: string): boolean {
   }
 
   return true;
+  */
 }
 
 /**
