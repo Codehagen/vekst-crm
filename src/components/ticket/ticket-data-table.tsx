@@ -110,8 +110,51 @@ import {
   assignTicket,
   updateTicketStatus,
   addTicketComment,
+  updateTicket,
+  createTicket,
+  getWorkspaceUsers,
 } from "@/app/actions/tickets";
+import { getAllBusinesses } from "@/app/actions/businesses/actions";
 import { UserAssignSelect } from "./user-assign-select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+
+// Status text mapping
+const statusMap: Record<string, string> = {
+  unassigned: "Ikke tildelt",
+  open: "Åpen",
+  in_progress: "Under arbeid",
+  waiting_on_customer: "Venter på kunde",
+  waiting_on_third_party: "Venter på tredjepart",
+  resolved: "Løst",
+  closed: "Lukket",
+};
+
+// Status color mapping for loader icons
+const statusColorMap: Record<string, string> = {
+  unassigned: "text-gray-500",
+  open: "text-blue-500",
+  in_progress: "text-yellow-500",
+  waiting_on_customer: "text-purple-500",
+  waiting_on_third_party: "text-orange-500",
+  resolved: "fill-green-500 dark:fill-green-400",
+  closed: "fill-green-500 dark:fill-green-400",
+};
+
+// Priority text mapping
+const priorityMap: Record<string, string> = {
+  low: "Lav",
+  medium: "Middels",
+  high: "Høy",
+  urgent: "Kritisk",
+};
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: string }) {
@@ -128,7 +171,7 @@ function DragHandle({ id }: { id: string }) {
       className="text-muted-foreground size-7 hover:bg-transparent"
     >
       <IconGripVertical className="text-muted-foreground size-3" />
-      <span className="sr-only">Drag to reorder</span>
+      <span className="sr-only">Dra for å omorganisere</span>
     </Button>
   );
 }
@@ -150,7 +193,7 @@ const columns: ColumnDef<Ticket>[] = [
             (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label="Velg alle"
         />
       </div>
     ),
@@ -159,7 +202,7 @@ const columns: ColumnDef<Ticket>[] = [
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label="Velg rad"
         />
       </div>
     ),
@@ -168,7 +211,7 @@ const columns: ColumnDef<Ticket>[] = [
   },
   {
     accessorKey: "title",
-    header: "Title",
+    header: "Tittel",
     cell: ({ row }) => {
       return <TicketViewer ticket={row.original} />;
     },
@@ -184,10 +227,15 @@ const columns: ColumnDef<Ticket>[] = [
           row.original.status === "closed" ? (
             <IconCircleCheckFilled className="mr-1 fill-green-500 dark:fill-green-400 size-4" />
           ) : (
-            <IconLoader className="mr-1 size-4" />
+            <IconLoader
+              className={`mr-1 size-4 ${
+                statusColorMap[row.original.status] || ""
+              }`}
+            />
           )}
-          <span className="capitalize">
-            {row.original.status.replace(/_/g, " ")}
+          <span>
+            {statusMap[row.original.status] ||
+              row.original.status.replace(/_/g, " ")}
           </span>
         </Badge>
       </div>
@@ -195,38 +243,36 @@ const columns: ColumnDef<Ticket>[] = [
   },
   {
     accessorKey: "priority",
-    header: "Priority",
+    header: "Prioritet",
     cell: ({ row }) => (
       <div className="w-32">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          <span className="capitalize">{row.original.priority}</span>
-        </Badge>
+        <PriorityBadge priority={row.original.priority} />
       </div>
     ),
   },
   {
     accessorKey: "businessName",
-    header: "Business",
+    header: "Bedrift",
     cell: ({ row }) => (
       <div className="max-w-[180px] truncate">
-        {row.original.businessName || "Unassigned"}
+        {row.original.businessName || "Ikke tildelt"}
       </div>
     ),
   },
   {
     accessorKey: "dueDate",
-    header: "Due Date",
+    header: "Frist",
     cell: ({ row }) => (
       <div className="min-w-[100px]">
         {row.original.dueDate
           ? format(row.original.dueDate, "MMM d, yyyy")
-          : "No date set"}
+          : "Ingen frist satt"}
       </div>
     ),
   },
   {
     accessorKey: "assignee",
-    header: "Assignee",
+    header: "Tildelt til",
     cell: ({ row }) => {
       const isAssigned = !!row.original.assignee;
 
@@ -253,31 +299,31 @@ const columns: ColumnDef<Ticket>[] = [
             size="icon"
           >
             <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">Åpne meny</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onClick={() => handleViewTicket(row.original.id)}>
-            View Details
+            Vis detaljer
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleEditTicket(row.original.id)}>
-            Edit Ticket
+            Rediger sak
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "in_progress")}
           >
-            Mark In Progress
+            Merk som under arbeid
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "resolved")}
           >
-            Mark Resolved
+            Merk som løst
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "closed")}
           >
-            Close Ticket
+            Lukk sak
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -288,9 +334,9 @@ const columns: ColumnDef<Ticket>[] = [
 // Action handlers that call server actions
 async function handleTicketAssignee(ticketId: string, assigneeId: string) {
   toast.promise(assignTicket(ticketId, assigneeId), {
-    loading: `Assigning ticket...`,
-    success: `Ticket assigned successfully`,
-    error: "Failed to assign ticket",
+    loading: `Tildeler sak...`,
+    success: `Sak tildelt`,
+    error: "Kunne ikke tildele sak",
   });
 }
 
@@ -306,22 +352,22 @@ function handleEditTicket(ticketId: string) {
 
 async function handleUpdateStatus(ticketId: string, status: string) {
   toast.promise(updateTicketStatus(ticketId, status), {
-    loading: `Updating ticket status...`,
-    success: `Ticket status updated to ${status}`,
-    error: "Failed to update ticket status",
+    loading: `Oppdaterer status...`,
+    success: `Status oppdatert til ${statusMap[status] || status}`,
+    error: "Kunne ikke oppdatere status",
   });
 }
 
 async function handleAddComment(ticketId: string, content: string) {
   if (!content.trim()) {
-    toast.error("Comment cannot be empty");
+    toast.error("Kommentar kan ikke være tom");
     return;
   }
 
   toast.promise(addTicketComment(ticketId, content, undefined, false), {
-    loading: "Adding comment...",
-    success: "Comment added successfully",
-    error: "Failed to add comment",
+    loading: "Legger til kommentar...",
+    success: "Kommentar lagt til",
+    error: "Kunne ikke legge til kommentar",
   });
 }
 
@@ -347,6 +393,275 @@ function DraggableRow({ row }: { row: Row<Ticket> }) {
         </TableCell>
       ))}
     </TableRow>
+  );
+}
+
+// Define the AddTicketSheet component
+function AddTicketSheet() {
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    subject: "",
+    description: "",
+    priority: "medium" as "low" | "medium" | "high" | "urgent",
+    companyName: "",
+    status: "open" as string,
+    businessId: "",
+    assigneeId: "",
+  });
+  const [businesses, setBusinesses] = React.useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [isLoadingBusinesses, setIsLoadingBusinesses] = React.useState(false);
+  const [showCustomBusiness, setShowCustomBusiness] = React.useState(false);
+
+  // Fetch businesses when the form opens
+  React.useEffect(() => {
+    if (open && businesses.length === 0) {
+      fetchBusinesses();
+    }
+  }, [open, businesses.length]);
+
+  // Function to fetch businesses
+  const fetchBusinesses = async () => {
+    try {
+      setIsLoadingBusinesses(true);
+      const businessList = await getAllBusinesses();
+      setBusinesses(businessList.map((b) => ({ id: b.id, name: b.name })));
+    } catch (error) {
+      console.error("Error loading businesses:", error);
+    } finally {
+      setIsLoadingBusinesses(false);
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePriorityChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      priority: value as "low" | "medium" | "high" | "urgent",
+    }));
+  };
+
+  const handleStatusChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, status: value }));
+  };
+
+  const handleBusinessChange = (value: string) => {
+    if (value === "custom") {
+      setShowCustomBusiness(true);
+      setFormData((prev) => ({ ...prev, businessId: "" }));
+    } else {
+      setShowCustomBusiness(false);
+      setFormData((prev) => ({ ...prev, businessId: value, companyName: "" }));
+    }
+  };
+
+  const handleAssign = (ticketId: string, userId: string) => {
+    setFormData((prev) => ({ ...prev, assigneeId: userId }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Prepare data for submission
+      const ticketData = {
+        subject: formData.subject,
+        description: formData.description,
+        priority: formData.priority,
+        status: formData.status,
+        assigneeId: formData.assigneeId || undefined,
+        // Include either businessId or companyName
+        ...(formData.businessId
+          ? { businessId: formData.businessId }
+          : { companyName: formData.companyName }),
+      };
+
+      const response = await createTicket(ticketData);
+
+      await toast.promise(Promise.resolve(response), {
+        loading: "Oppretter sak...",
+        success: "Sak opprettet",
+        error: "Kunne ikke opprette sak",
+      });
+
+      if (response.success) {
+        setFormData({
+          subject: "",
+          description: "",
+          priority: "medium" as "low" | "medium" | "high" | "urgent",
+          companyName: "",
+          status: "open",
+          businessId: "",
+          assigneeId: "",
+        });
+        setOpen(false);
+      }
+    } catch (error) {
+      console.error("Error creating ticket:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="sm">
+          <IconPlus className="mr-2 h-4 w-4" />
+          <span className="hidden lg:inline">Legg til sak</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="sm:max-w-md w-[90vw]">
+        <SheetHeader>
+          <SheetTitle>Opprett ny sak</SheetTitle>
+          <SheetDescription>
+            Fyll ut informasjonen for å opprette en ny sak.
+          </SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="subject" className="required">
+              Tittel
+            </Label>
+            <Input
+              id="subject"
+              name="subject"
+              value={formData.subject}
+              onChange={handleChange}
+              placeholder="Kort beskrivelse av saken"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="description" className="required">
+              Beskrivelse
+            </Label>
+            <Textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Detaljert beskrivelse av saken"
+              className="min-h-[120px]"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="status">Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger id="status" className="w-full">
+                  <SelectValue placeholder="Velg status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Åpen</SelectItem>
+                  <SelectItem value="in_progress">Pågående</SelectItem>
+                  <SelectItem value="waiting_on_customer">
+                    Venter på kunde
+                  </SelectItem>
+                  <SelectItem value="waiting_on_third_party">
+                    Venter på tredjepart
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="priority">Prioritet</Label>
+              <Select
+                value={formData.priority}
+                onValueChange={handlePriorityChange}
+              >
+                <SelectTrigger id="priority" className="w-full">
+                  <SelectValue placeholder="Velg prioritet" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Lav</SelectItem>
+                  <SelectItem value="medium">Middels</SelectItem>
+                  <SelectItem value="high">Høy</SelectItem>
+                  <SelectItem value="urgent">Kritisk</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="business">Bedrift</Label>
+            <Select
+              value={
+                formData.businessId || (showCustomBusiness ? "custom" : "")
+              }
+              onValueChange={handleBusinessChange}
+            >
+              <SelectTrigger id="business" className="w-full">
+                <SelectValue placeholder="Velg bedrift" />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingBusinesses ? (
+                  <SelectItem value="loading" disabled>
+                    Laster bedrifter...
+                  </SelectItem>
+                ) : (
+                  <>
+                    {businesses.map((business) => (
+                      <SelectItem key={business.id} value={business.id}>
+                        {business.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Annen bedrift</SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+
+            {showCustomBusiness && (
+              <Input
+                id="companyName"
+                name="companyName"
+                value={formData.companyName}
+                onChange={handleChange}
+                placeholder="Skriv inn bedriftsnavn"
+                className="mt-2"
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="assignee">Tildelt til</Label>
+            <div className="w-full">
+              <UserAssignSelect ticketId="new-ticket" onAssign={handleAssign} />
+            </div>
+          </div>
+
+          <SheetFooter className="pt-4">
+            <Button
+              type="submit"
+              disabled={
+                isSubmitting || !formData.subject || !formData.description
+              }
+              className="w-full"
+            >
+              {isSubmitting ? "Oppretter..." : "Opprett sak"}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -461,26 +776,26 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
       <div className="flex items-center justify-between px-4 lg:px-6">
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
           <TabsTrigger value="all">
-            All Tickets <Badge variant="secondary">{statusCounts.all}</Badge>
+            Alle saker <Badge variant="secondary">{statusCounts.all}</Badge>
           </TabsTrigger>
           <TabsTrigger value="open">
-            Open <Badge variant="secondary">{statusCounts.open}</Badge>
+            Åpne <Badge variant="secondary">{statusCounts.open}</Badge>
           </TabsTrigger>
           <TabsTrigger value="in_progress">
-            In Progress{" "}
+            Pågående{" "}
             <Badge variant="secondary">{statusCounts.in_progress}</Badge>
           </TabsTrigger>
           <TabsTrigger value="waiting_on_customer">
-            Waiting on Customer{" "}
+            Venter på kunde{" "}
             <Badge variant="secondary">
               {statusCounts.waiting_on_customer}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="resolved">
-            Resolved <Badge variant="secondary">{statusCounts.resolved}</Badge>
+            Løst <Badge variant="secondary">{statusCounts.resolved}</Badge>
           </TabsTrigger>
           <TabsTrigger value="closed">
-            Closed <Badge variant="secondary">{statusCounts.closed}</Badge>
+            Lukket <Badge variant="secondary">{statusCounts.closed}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -489,8 +804,8 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <IconLayoutColumns className="mr-2 h-4 w-4" />
-                <span className="hidden lg:inline">Customize Columns</span>
-                <span className="lg:hidden">Columns</span>
+                <span className="hidden lg:inline">Tilpass kolonner</span>
+                <span className="lg:hidden">Kolonner</span>
                 <IconChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -518,10 +833,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm">
-            <IconPlus className="mr-2 h-4 w-4" />
-            <span className="hidden lg:inline">Add Ticket</span>
-          </Button>
+          <AddTicketSheet />
         </div>
       </div>
 
@@ -529,7 +841,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
       <div className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
         <div className="flex items-center gap-4 mb-4">
           <Input
-            placeholder="Search tickets..."
+            placeholder="Søk i saker..."
             className="max-w-sm"
             value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
             onChange={(e) =>
@@ -580,7 +892,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                       colSpan={columns.length}
                       className="h-24 text-center"
                     >
-                      No tickets found.
+                      Ingen saker funnet.
                     </TableCell>
                   </TableRow>
                 )}
@@ -590,13 +902,13 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
         </div>
         <div className="flex items-center justify-between px-4">
           <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} ticket(s) selected.
+            {table.getFilteredSelectedRowModel().rows.length} av{" "}
+            {table.getFilteredRowModel().rows.length} sak(er) valgt.
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
               <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
+                Rader per side
               </Label>
               <Select
                 value={`${table.getState().pagination.pageSize}`}
@@ -619,7 +931,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
               </Select>
             </div>
             <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              Side {table.getState().pagination.pageIndex + 1} av{" "}
               {table.getPageCount()}
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
@@ -630,7 +942,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">Gå til første side</span>
                 <IconChevronsLeft className="h-4 w-4" />
               </Button>
               <Button
@@ -640,7 +952,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">Gå til forrige side</span>
                 <IconChevronLeft className="h-4 w-4" />
               </Button>
               <Button
@@ -650,7 +962,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">Gå til neste side</span>
                 <IconChevronRight className="h-4 w-4" />
               </Button>
               <Button
@@ -660,7 +972,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">Gå til siste side</span>
                 <IconChevronsRight className="h-4 w-4" />
               </Button>
             </div>
@@ -676,9 +988,103 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
   const [open, setOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
 
+  // Add state for editable fields
+  const [status, setStatus] = React.useState(ticket.status);
+  const [priority, setPriority] = React.useState(ticket.priority);
+  const [businessName, setBusinessName] = React.useState(
+    ticket.businessName || ""
+  );
+  const [description, setDescription] = React.useState(ticket.description);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [hasChanges, setHasChanges] = React.useState(false);
+
+  // Track changes when editing fields - only for fields that don't auto-save
+  React.useEffect(() => {
+    const changes =
+      businessName !== (ticket.businessName || "") ||
+      description !== ticket.description;
+
+    setHasChanges(changes);
+  }, [businessName, description, ticket]);
+
   const handleSubmitComment = async () => {
     await handleAddComment(ticket.id, comment);
     setComment(""); // Clear the comment field after submission
+  };
+
+  // Status change handler with immediate save
+  const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === status) return;
+
+    setStatus(newStatus);
+    try {
+      await toast.promise(updateTicketStatus(ticket.id, newStatus), {
+        loading: "Oppdaterer status...",
+        success: `Status oppdatert til ${statusMap[newStatus] || newStatus}`,
+        error: "Kunne ikke oppdatere status",
+      });
+    } catch (error) {
+      console.error("Error updating status:", error);
+      // Reset to original value on error
+      setStatus(ticket.status);
+    }
+  };
+
+  // Priority change handler with immediate save
+  const handlePriorityChange = async (newPriority: string) => {
+    if (newPriority === priority) return;
+
+    setPriority(newPriority);
+    try {
+      const result = await toast.promise(
+        updateTicket(ticket.id, { priority: newPriority }),
+        {
+          loading: "Oppdaterer prioritet...",
+          success: `Prioritet oppdatert til ${
+            priorityMap[newPriority] || newPriority
+          }`,
+          error: "Kunne ikke oppdatere prioritet",
+        }
+      );
+
+      // Success is handled by the toast
+    } catch (error) {
+      console.error("Error updating priority:", error);
+      // Reset to original value on error
+      setPriority(ticket.priority);
+    }
+  };
+
+  // Handler for saving text fields
+  const handleSaveChanges = async () => {
+    if (!hasChanges) return;
+
+    setIsSubmitting(true);
+    try {
+      // Prepare update data with proper type annotation
+      const updateData: Record<string, any> = {
+        description,
+      };
+
+      // Only include businessName if it's been changed and is not empty
+      if (businessName && businessName !== ticket.businessName) {
+        // Using a more generic Record type to avoid TypeScript errors
+        updateData.submittedCompanyName = businessName;
+      }
+
+      await toast.promise(updateTicket(ticket.id, updateData), {
+        loading: "Lagrer endringer...",
+        success: "Sak oppdatert",
+        error: "Kunne ikke oppdatere sak",
+      });
+
+      // Success is handled by the toast
+      setHasChanges(false);
+    } catch (error) {
+      console.error("Error updating ticket:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -696,13 +1102,13 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
         <DrawerHeader className="gap-1">
           <DrawerTitle>{ticket.title}</DrawerTitle>
           <DrawerDescription>
-            Created on {format(ticket.createdAt, "PPP")}
+            Opprettet {format(ticket.createdAt, "PPP")}
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
           <div className="grid gap-2">
             <div className="flex gap-2 leading-none font-medium">
-              Ticket Details
+              Saksdetaljer
             </div>
           </div>
           <Separator />
@@ -710,50 +1116,51 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
                 <Label htmlFor="status">Status</Label>
-                <Select defaultValue={ticket.status}>
+                <Select value={status} onValueChange={handleStatusChange}>
                   <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
+                    <SelectValue placeholder="Velg status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="open">Åpen</SelectItem>
+                    <SelectItem value="in_progress">Pågående</SelectItem>
                     <SelectItem value="waiting_on_customer">
-                      Waiting on Customer
+                      Venter på kunde
                     </SelectItem>
                     <SelectItem value="waiting_on_third_party">
-                      Waiting on Third Party
+                      Venter på tredjepart
                     </SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
+                    <SelectItem value="resolved">Løst</SelectItem>
+                    <SelectItem value="closed">Lukket</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="priority">Priority</Label>
-                <Select defaultValue={ticket.priority}>
+                <Label htmlFor="priority">Prioritet</Label>
+                <Select value={priority} onValueChange={handlePriorityChange}>
                   <SelectTrigger id="priority" className="w-full">
-                    <SelectValue placeholder="Select a priority" />
+                    <SelectValue placeholder="Velg prioritet" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="low">Lav</SelectItem>
+                    <SelectItem value="medium">Middels</SelectItem>
+                    <SelectItem value="high">Høy</SelectItem>
+                    <SelectItem value="urgent">Kritisk</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="business">Business</Label>
+                <Label htmlFor="business">Bedrift</Label>
                 <Input
                   id="business"
-                  defaultValue={ticket.businessName || ""}
-                  placeholder="Assign to business"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Tildel til bedrift"
                 />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="assignee">Assignee</Label>
+                <Label htmlFor="assignee">Tildelt til</Label>
                 <UserAssignSelect
                   ticketId={ticket.id}
                   onAssign={handleTicketAssignee}
@@ -761,18 +1168,19 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">Beskrivelse</Label>
               <Textarea
                 id="description"
-                defaultValue={ticket.description}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 className="min-h-[120px]"
               />
             </div>
             <div className="flex flex-col gap-3">
-              <Label htmlFor="comment">Add a comment</Label>
+              <Label htmlFor="comment">Legg til kommentar</Label>
               <Textarea
                 id="comment"
-                placeholder="Type your comment here..."
+                placeholder="Skriv kommentaren din her..."
                 className="min-h-[100px]"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -780,7 +1188,7 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
             </div>
             {ticket.tags.length > 0 && (
               <div className="flex flex-col gap-3">
-                <Label>Tags</Label>
+                <Label>Tagger</Label>
                 <div className="flex flex-wrap gap-2">
                   {ticket.tags.map((tag) => (
                     <Badge key={tag} variant="secondary">
@@ -792,10 +1200,27 @@ function TicketViewer({ ticket }: { ticket: Ticket }) {
             )}
           </form>
         </div>
-        <DrawerFooter>
-          <Button onClick={handleSubmitComment}>Submit Comment</Button>
+        <DrawerFooter className="flex flex-col sm:flex-row gap-2">
+          {hasChanges && (
+            <Button
+              onClick={handleSaveChanges}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto"
+            >
+              {isSubmitting ? "Lagrer..." : "Lagre endringer"}
+            </Button>
+          )}
+          <Button
+            onClick={handleSubmitComment}
+            disabled={!comment.trim()}
+            className="w-full sm:w-auto"
+          >
+            Send kommentar
+          </Button>
           <DrawerClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="outline" className="w-full sm:w-auto">
+              Lukk
+            </Button>
           </DrawerClose>
         </DrawerFooter>
       </DrawerContent>

@@ -31,7 +31,7 @@ export interface Ticket {
  */
 async function getCurrentUserWorkspaceId(): Promise<string> {
   const session = await getSession({
-    headers: Object.fromEntries(headers().entries()),
+    headers: await headers(),
   });
 
   if (!session?.user?.id) {
@@ -55,7 +55,7 @@ async function getCurrentUserWorkspaceId(): Promise<string> {
  */
 async function getCurrentUserId(): Promise<string> {
   const session = await getSession({
-    headers: Object.fromEntries(headers().entries()),
+    headers: await headers(),
   });
 
   if (!session?.user?.id) {
@@ -175,9 +175,14 @@ export async function getTickets(
         ...(status ? { status: status as any } : {}),
         ...(businessId ? { businessId } : {}),
         ...(assigneeId ? { assigneeId } : {}),
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
       orderBy: { createdAt: "desc" },
       include: {
@@ -243,9 +248,14 @@ export async function getUserTickets(
       where: {
         assigneeId: userId,
         ...(status ? { status: status as any } : {}),
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
       orderBy: { createdAt: "desc" },
       include: {
@@ -323,9 +333,14 @@ export async function getTicket(id: string) {
     const ticket = await prisma.ticket.findFirst({
       where: {
         id,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
       include: {
         business: true,
@@ -372,6 +387,7 @@ export async function createTicket(data: {
   description: string;
   priority?: "low" | "medium" | "high" | "urgent";
   assigneeId?: string;
+  businessId?: string;
 }) {
   try {
     const workspaceId = await getCurrentUserWorkspaceId();
@@ -385,6 +401,7 @@ export async function createTicket(data: {
       description,
       priority = "medium",
       assigneeId,
+      businessId: providedBusinessId,
     } = data;
 
     // Validate required fields
@@ -406,12 +423,37 @@ export async function createTicket(data: {
       }
     }
 
-    // Try to find business match within the workspace
-    const possibleBusinessMatch = await findPossibleBusinessMatch(
-      email || "",
-      companyName || "",
-      workspaceId
-    );
+    // If businessId is provided, verify it belongs to the workspace
+    let businessId = providedBusinessId;
+    if (businessId) {
+      const business = await prisma.business.findFirst({
+        where: {
+          id: businessId,
+          workspaceId,
+        },
+      });
+
+      if (!business) {
+        businessId = undefined; // Clear invalid businessId
+      }
+    }
+
+    // Try to find business match within the workspace if not explicitly provided
+    if (!businessId && (email || companyName)) {
+      const possibleBusinessMatch = await findPossibleBusinessMatch(
+        email || "",
+        companyName || "",
+        workspaceId
+      );
+
+      // Add business connection if we have a high confidence match
+      if (
+        possibleBusinessMatch?.confidence === "high" &&
+        possibleBusinessMatch.businessId
+      ) {
+        businessId = possibleBusinessMatch.businessId;
+      }
+    }
 
     // Default ticket data
     const ticketData: any = {
@@ -424,15 +466,16 @@ export async function createTicket(data: {
       submittedCompanyName: companyName,
       assigneeId: assigneeId || null,
       creatorId: userId,
+      workspaceId: workspaceId, // Always set workspaceId
     };
 
-    // Add business connection if we have a high confidence match
-    if (
-      possibleBusinessMatch?.confidence === "high" &&
-      possibleBusinessMatch.businessId
-    ) {
-      ticketData.businessId = possibleBusinessMatch.businessId;
-      ticketData.status = "open"; // Auto-assign if high confidence
+    // Add business connection if we have a match
+    if (businessId) {
+      ticketData.businessId = businessId;
+      // If we have a business match and no assignee, set the status to open
+      if (!assigneeId) {
+        ticketData.status = "open";
+      }
     }
 
     // Create ticket within the workspace
@@ -445,8 +488,7 @@ export async function createTicket(data: {
     return {
       success: true,
       ticketId: ticket.id,
-      requiresReview:
-        !possibleBusinessMatch || possibleBusinessMatch.confidence !== "high",
+      requiresReview: !businessId, // Requires review if no business match
     };
   } catch (error) {
     console.error("Error creating ticket:", error);
@@ -474,9 +516,14 @@ export async function updateTicket(
     const existingTicket = await prisma.ticket.findFirst({
       where: {
         id,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 
@@ -564,9 +611,14 @@ export async function addComment(
     const ticket = await prisma.ticket.findFirst({
       where: {
         id: ticketId,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 
@@ -609,9 +661,14 @@ export async function deleteTicket(id: string) {
     const existingTicket = await prisma.ticket.findFirst({
       where: {
         id,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 
@@ -679,9 +736,14 @@ export async function assignTicket(ticketId: string, assigneeId: string) {
     const existingTicket = await prisma.ticket.findFirst({
       where: {
         id: ticketId,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 
@@ -735,9 +797,14 @@ export async function updateTicketStatus(ticketId: string, status: string) {
     const existingTicket = await prisma.ticket.findFirst({
       where: {
         id: ticketId,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 
@@ -786,9 +853,14 @@ export async function addTicketComment(
     const ticket = await prisma.ticket.findFirst({
       where: {
         id: ticketId,
-        business: {
-          workspaceId,
-        },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
       },
     });
 

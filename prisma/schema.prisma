@@ -38,6 +38,7 @@ model Workspace {
   users        User[]
   businesses   Business[]
   applications JobApplication[]
+  tickets      Ticket[]
 
   @@map("workspaces")
 }
@@ -328,11 +329,16 @@ model Ticket {
   assigneeId String? // ID of user assigned to ticket
   creatorId  String? // ID of user who created ticket
 
+  // Direct workspace relation
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
   // Child relations
   comments   TicketComment[]
   activities Activity[]
   tags       Tag[]           @relation("TicketToTag")
 
+  @@index([workspaceId])
   @@map("tickets")
 }
 

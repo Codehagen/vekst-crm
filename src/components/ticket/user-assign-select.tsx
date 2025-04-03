@@ -85,7 +85,7 @@ export function UserAssignSelect({
           className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
           id={`${ticketId}-assignee`}
         >
-          <SelectValue placeholder="Assign ticket" />
+          <SelectValue placeholder="Tildel sak" />
         </SelectTrigger>
         <SelectContent align="end">
           {isLoading ? (
