@@ -22,6 +22,7 @@ export interface Ticket {
   createdAt: Date;
   updatedAt: Date;
   dueDate: Date | null;
+  estimatedTime: number | null;
   tags: string[];
   commentCount: number;
 }
@@ -215,6 +216,7 @@ export async function getTickets(
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
         dueDate: ticket.dueDate,
+        estimatedTime: ticket.estimatedTime,
         tags: ticket.tags.map((tag) => tag.name),
         commentCount: ticket.comments.length,
       };
@@ -288,6 +290,7 @@ export async function getUserTickets(
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
         dueDate: ticket.dueDate,
+        estimatedTime: ticket.estimatedTime,
         tags: ticket.tags.map((tag) => tag.name),
         commentCount: ticket.comments.length,
       };
@@ -388,6 +391,8 @@ export async function createTicket(data: {
   priority?: "low" | "medium" | "high" | "urgent";
   assigneeId?: string;
   businessId?: string;
+  dueDate?: Date;
+  estimatedTime?: number;
 }) {
   try {
     const workspaceId = await getCurrentUserWorkspaceId();
@@ -402,6 +407,8 @@ export async function createTicket(data: {
       priority = "medium",
       assigneeId,
       businessId: providedBusinessId,
+      dueDate,
+      estimatedTime,
     } = data;
 
     // Validate required fields
@@ -467,6 +474,8 @@ export async function createTicket(data: {
       assigneeId: assigneeId || null,
       creatorId: userId,
       workspaceId: workspaceId, // Always set workspaceId
+      dueDate: dueDate,
+      estimatedTime: estimatedTime,
     };
 
     // Add business connection if we have a match
@@ -506,6 +515,8 @@ export async function updateTicket(
     priority?: string;
     businessId?: string;
     assigneeId?: string;
+    dueDate?: Date | null;
+    estimatedTime?: number | null;
     [key: string]: any;
   }
 ) {
@@ -687,6 +698,68 @@ export async function deleteTicket(id: string) {
   } catch (error) {
     console.error(`Error deleting ticket ${id}:`, error);
     return { success: false, error: "Failed to delete ticket" };
+  }
+}
+
+/**
+ * Delete multiple tickets with workspace verification
+ */
+export async function deleteTickets(ids: string[]) {
+  try {
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Verify all tickets exist and belong to workspace
+    const existingTickets = await prisma.ticket.findMany({
+      where: {
+        id: { in: ids },
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    // Get the IDs of existing tickets
+    const validTicketIds = existingTickets.map((ticket) => ticket.id);
+
+    // Check if any tickets were not found
+    if (validTicketIds.length !== ids.length) {
+      const missingTickets = ids.filter((id) => !validTicketIds.includes(id));
+      console.warn(`Some tickets were not found: ${missingTickets.join(", ")}`);
+    }
+
+    if (validTicketIds.length === 0) {
+      return {
+        success: false,
+        error: "No valid tickets to delete",
+      };
+    }
+
+    // Delete the tickets that exist and belong to the workspace
+    const result = await prisma.ticket.deleteMany({
+      where: {
+        id: { in: validTicketIds },
+      },
+    });
+
+    revalidatePath("/tickets");
+
+    return {
+      success: true,
+      count: result.count,
+      deleted: validTicketIds,
+    };
+  } catch (error) {
+    console.error(`Error deleting tickets: ${error}`);
+    return {
+      success: false,
+      error: "Failed to delete tickets",
+    };
   }
 }
 

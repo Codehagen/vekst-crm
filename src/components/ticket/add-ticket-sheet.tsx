@@ -28,6 +28,7 @@ import {
 import { UserAssignSelect } from "./user-assign-select";
 import { createTicket } from "@/app/actions/tickets";
 import { getAllBusinesses } from "@/app/actions/businesses/actions";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface AddTicketSheetProps {
   onTicketCreated?: () => void;
@@ -44,6 +45,8 @@ export function AddTicketSheet({ onTicketCreated }: AddTicketSheetProps) {
     status: "open" as string,
     businessId: "",
     assigneeId: "",
+    dueDate: undefined as Date | undefined,
+    estimatedTime: "" as string,
   });
   const [businesses, setBusinesses] = React.useState<
     Array<{ id: string; name: string }>
@@ -105,6 +108,18 @@ export function AddTicketSheet({ onTicketCreated }: AddTicketSheetProps) {
     setFormData((prev) => ({ ...prev, assigneeId: userId }));
   };
 
+  const handleDueDateChange = (date: Date | undefined) => {
+    setFormData((prev) => ({ ...prev, dueDate: date }));
+  };
+
+  const handleEstimatedTimeChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    // Allow only numbers
+    const value = e.target.value.replace(/\D/g, "");
+    setFormData((prev) => ({ ...prev, estimatedTime: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -117,6 +132,10 @@ export function AddTicketSheet({ onTicketCreated }: AddTicketSheetProps) {
         priority: formData.priority,
         status: formData.status,
         assigneeId: formData.assigneeId || undefined,
+        dueDate: formData.dueDate,
+        estimatedTime: formData.estimatedTime
+          ? parseInt(formData.estimatedTime, 10)
+          : undefined,
         // Include either businessId or companyName
         ...(formData.businessId
           ? { businessId: formData.businessId }
@@ -140,6 +159,8 @@ export function AddTicketSheet({ onTicketCreated }: AddTicketSheetProps) {
           status: "open",
           businessId: "",
           assigneeId: "",
+          dueDate: undefined,
+          estimatedTime: "",
         });
         setOpen(false);
 
@@ -286,6 +307,31 @@ export function AddTicketSheet({ onTicketCreated }: AddTicketSheetProps) {
             <Label htmlFor="assignee">Tildelt til</Label>
             <div className="w-full">
               <UserAssignSelect ticketId="new-ticket" onAssign={handleAssign} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="dueDate">Frist</Label>
+              <DatePicker
+                date={formData.dueDate}
+                onDateChange={handleDueDateChange}
+                placeholder="Ingen frist satt"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="estimatedTime">Estimert tid (minutter)</Label>
+              <Input
+                id="estimatedTime"
+                name="estimatedTime"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={formData.estimatedTime}
+                onChange={handleEstimatedTimeChange}
+                placeholder="Estimert tid i minutter"
+              />
             </div>
           </div>
 

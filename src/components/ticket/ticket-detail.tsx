@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
+import { nb } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -67,6 +70,7 @@ interface Ticket {
   creatorId: string | null;
   comments: Comment[];
   tags: Tag[];
+  estimatedTime?: string;
 }
 
 interface TicketDetailProps {
@@ -80,6 +84,14 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [internalComment, setInternalComment] = useState(false);
+  const [dueDate, setDueDate] = useState<Date | undefined>(
+    ticket.dueDate ? new Date(ticket.dueDate) : undefined
+  );
+  const [estimatedTime, setEstimatedTime] = useState(
+    ticket.estimatedTime || ""
+  );
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+  const [isEditingEstimatedTime, setIsEditingEstimatedTime] = useState(false);
 
   async function handleStatusChange(newStatus: string) {
     if (newStatus === status) return;
@@ -143,6 +155,49 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
   async function handleAssignBusiness() {
     router.push(`/tickets/${ticket.id}/assign-business`);
+  }
+
+  async function handleDueDateChange(date: Date | undefined) {
+    try {
+      const response = await updateTicket(ticket.id, { dueDate: date });
+
+      if (response.success) {
+        setDueDate(date);
+        setIsEditingDueDate(false);
+        toast.success("Frist oppdatert");
+        router.refresh();
+      } else {
+        toast.error("Feil ved oppdatering av frist", {
+          description: response.error || "Kunne ikke oppdatere frist",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating due date:", error);
+      toast.error("Feil ved oppdatering av frist");
+    }
+  }
+
+  async function handleEstimatedTimeChange(e: React.FormEvent) {
+    e.preventDefault();
+    const value = parseInt(estimatedTime as string, 10) || null;
+
+    try {
+      const response = await updateTicket(ticket.id, { estimatedTime: value });
+
+      if (response.success) {
+        // Only close editing mode and show toast if successful
+        setIsEditingEstimatedTime(false);
+        toast.success("Estimert tid oppdatert");
+        router.refresh();
+      } else {
+        toast.error("Feil ved oppdatering av estimert tid", {
+          description: response.error || "Kunne ikke oppdatere estimert tid",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating estimated time:", error);
+      toast.error("Feil ved oppdatering av estimert tid");
+    }
   }
 
   return (
@@ -311,26 +366,87 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
               <div className="text-muted-foreground">Opprettet</div>
               <div className="text-right">
-                {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+                {format(new Date(ticket.createdAt), "d. MMM yyyy", {
+                  locale: nb,
+                })}
               </div>
 
               {ticket.resolvedAt && (
                 <>
                   <div className="text-muted-foreground">Løst</div>
                   <div className="text-right">
-                    {format(new Date(ticket.resolvedAt), "MMM d, yyyy")}
+                    {format(new Date(ticket.resolvedAt), "d. MMM yyyy", {
+                      locale: nb,
+                    })}
                   </div>
                 </>
               )}
 
-              {ticket.dueDate && (
-                <>
-                  <div className="text-muted-foreground">Forfallsdato</div>
-                  <div className="text-right">
-                    {format(new Date(ticket.dueDate), "MMM d, yyyy")}
+              {/* Due Date section with edit capability */}
+              <div className="text-muted-foreground">Forfallsdato</div>
+              <div className="text-right flex justify-end items-center gap-2">
+                {isEditingDueDate ? (
+                  <div className="w-[180px]">
+                    <DatePicker
+                      date={dueDate}
+                      onDateChange={handleDueDateChange}
+                      placeholder="Ingen frist satt"
+                    />
                   </div>
-                </>
-              )}
+                ) : (
+                  <>
+                    {ticket.dueDate
+                      ? format(new Date(ticket.dueDate), "d. MMM yyyy", {
+                          locale: nb,
+                        })
+                      : "Ingen frist satt"}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsEditingDueDate(true)}
+                      className="h-5 w-5"
+                    >
+                      ✏️
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Estimated Time section with edit capability */}
+              <div className="text-muted-foreground">Estimert tid</div>
+              <div className="text-right flex justify-end items-center gap-2">
+                {isEditingEstimatedTime ? (
+                  <form
+                    onSubmit={handleEstimatedTimeChange}
+                    className="flex w-[180px]"
+                  >
+                    <Input
+                      type="number"
+                      value={estimatedTime}
+                      onChange={(e) => setEstimatedTime(e.target.value)}
+                      placeholder="Minutter"
+                      className="h-8"
+                    />
+                    <Button type="submit" size="sm" className="ml-1 h-8">
+                      OK
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    {ticket.estimatedTime
+                      ? `${ticket.estimatedTime} minutter`
+                      : "Ikke satt"}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsEditingEstimatedTime(true)}
+                      className="h-5 w-5"
+                    >
+                      ✏️
+                    </Button>
+                  </>
+                )}
+              </div>
 
               <div className="col-span-2 mt-2">
                 <Separator />

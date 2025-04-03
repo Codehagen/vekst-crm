@@ -49,30 +49,13 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { format } from "date-fns";
+import { nb } from "date-fns/locale";
 import { toast } from "sonner";
-import { z } from "zod";
 
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -102,7 +85,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
 import { Ticket } from "@/app/actions/tickets";
 
@@ -113,20 +95,23 @@ import {
   updateTicket,
   createTicket,
   getWorkspaceUsers,
+  deleteTickets,
 } from "@/app/actions/tickets";
 import { getAllBusinesses } from "@/app/actions/businesses/actions";
 import { UserAssignSelect } from "./user-assign-select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+
 import { AddTicketSheet } from "./add-ticket-sheet";
 import { TicketViewer } from "./ticket-viewer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
 // Status text mapping
 const statusMap: Record<string, string> = {
   unassigned: "Ikke tildelt",
@@ -271,8 +256,19 @@ const columns: ColumnDef<Ticket>[] = [
     cell: ({ row }) => (
       <div className="min-w-[100px]">
         {row.original.dueDate
-          ? format(row.original.dueDate, "MMM d, yyyy")
+          ? format(row.original.dueDate, "d. MMM yyyy", { locale: nb })
           : "Ingen frist satt"}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "estimatedTime",
+    header: "Estimert tid",
+    cell: ({ row }) => (
+      <div className="min-w-[80px]">
+        {row.original.estimatedTime
+          ? `${row.original.estimatedTime} min`
+          : "Ikke satt"}
       </div>
     ),
   },
@@ -453,6 +449,9 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (active && over && active.id !== over.id) {
@@ -503,6 +502,37 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     table.resetColumnFilters();
   };
 
+  // Handler for deleting selected tickets
+  async function handleDeleteSelected() {
+    const selectedRowIds = Object.keys(rowSelection);
+    if (selectedRowIds.length === 0) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteTickets(selectedRowIds);
+
+      if (response.success) {
+        toast.success(
+          `${response.count} ${response.count === 1 ? "sak" : "saker"} slettet`
+        );
+        // Remove deleted tickets from the table data
+        setData((currentData) =>
+          currentData.filter((row) => !selectedRowIds.includes(row.id))
+        );
+        // Clear row selection
+        setRowSelection({});
+      } else {
+        toast.error(response.error || "Kunne ikke slette saker");
+      }
+    } catch (error) {
+      console.error("Error deleting tickets:", error);
+      toast.error("En feil oppstod ved sletting av saker");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  }
+
   return (
     <Tabs
       defaultValue="all"
@@ -537,6 +567,45 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
         </TabsList>
 
         <div className="flex items-center gap-2">
+          {Object.keys(rowSelection).length > 0 && (
+            <Dialog
+              open={isDeleteDialogOpen}
+              onOpenChange={setIsDeleteDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Slett ({Object.keys(rowSelection).length})
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Slett saker</DialogTitle>
+                  <DialogDescription>
+                    Er du sikker på at du vil slette{" "}
+                    {Object.keys(rowSelection).length}{" "}
+                    {Object.keys(rowSelection).length === 1 ? "sak" : "saker"}?
+                    Denne handlingen kan ikke angres.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(false)}
+                    disabled={isDeleting}
+                  >
+                    Avbryt
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteSelected}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Sletter..." : "Slett"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">

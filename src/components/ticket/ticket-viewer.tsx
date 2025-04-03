@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { nb } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ import {
 } from "@/app/actions/tickets";
 import { UserAssignSelect } from "./user-assign-select";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface TicketViewerProps {
   ticket: Ticket;
@@ -87,17 +89,24 @@ async function handleAddComment(ticketId: string, content: string) {
 
 export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
   const isMobile = useIsMobile();
-  const [open, setOpen] = React.useState(false);
-  const [comment, setComment] = React.useState("");
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [commentText, setCommentText] = React.useState("");
 
-  // Add state for editable fields
+  // State for ticket update form
+  const [title, setTitle] = React.useState(ticket.title);
   const [status, setStatus] = React.useState(ticket.status);
   const [priority, setPriority] = React.useState(ticket.priority);
+  const [dueDate, setDueDate] = React.useState<Date | undefined>(
+    ticket.dueDate ? new Date(ticket.dueDate) : undefined
+  );
+  const [estimatedTime, setEstimatedTime] = React.useState<string>(
+    ticket.estimatedTime?.toString() || ""
+  );
   const [businessName, setBusinessName] = React.useState(
     ticket.businessName || ""
   );
   const [description, setDescription] = React.useState(ticket.description);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [hasChanges, setHasChanges] = React.useState(false);
 
   // Track changes when editing fields - only for fields that don't auto-save
@@ -110,8 +119,8 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
   }, [businessName, description, ticket]);
 
   const handleSubmitComment = async () => {
-    await handleAddComment(ticket.id, comment);
-    setComment(""); // Clear the comment field after submission
+    await handleAddComment(ticket.id, commentText);
+    setCommentText(""); // Clear the comment field after submission
     if (onTicketUpdated) onTicketUpdated();
   };
 
@@ -131,6 +140,62 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
       console.error("Error updating status:", error);
       // Reset to original value on error
       setStatus(ticket.status);
+    }
+  };
+
+  // Due date change handler with immediate save
+  const handleDueDateChange = async (newDate: Date | undefined) => {
+    setDueDate(newDate);
+    try {
+      // First perform the update
+      const response = await updateTicket(ticket.id, { dueDate: newDate });
+
+      // Then show toast based on the result
+      if (newDate) {
+        toast.success("Frist satt");
+      } else {
+        toast.success("Frist fjernet");
+      }
+
+      // Trigger refresh if provided
+      if (onTicketUpdated) {
+        onTicketUpdated();
+      }
+    } catch (error) {
+      console.error("Error updating due date:", error);
+      toast.error("Kunne ikke oppdatere frist");
+      // Reset to original value on error
+      setDueDate(ticket.dueDate ? new Date(ticket.dueDate) : undefined);
+    }
+  };
+
+  // Estimated time change handler - updates DB when input loses focus
+  const handleEstimatedTimeBlur = async () => {
+    const valueAsNumber = estimatedTime ? parseInt(estimatedTime, 10) : null;
+
+    // Only update if the value has actually changed
+    if (valueAsNumber !== ticket.estimatedTime) {
+      try {
+        // First perform the update
+        await updateTicket(ticket.id, { estimatedTime: valueAsNumber });
+
+        // Then show appropriate toast
+        if (valueAsNumber) {
+          toast.success("Estimert tid satt");
+        } else {
+          toast.success("Estimert tid fjernet");
+        }
+
+        // Trigger refresh if provided
+        if (onTicketUpdated) {
+          onTicketUpdated();
+        }
+      } catch (error) {
+        console.error("Error updating estimated time:", error);
+        toast.error("Kunne ikke oppdatere estimert tid");
+        // Reset to original value on error
+        setEstimatedTime(ticket.estimatedTime?.toString() || "");
+      }
     }
   };
 
@@ -166,6 +231,11 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
     try {
       // Prepare update data with proper type annotation
       const updateData: Record<string, any> = {
+        title,
+        status,
+        priority,
+        dueDate: dueDate,
+        estimatedTime: estimatedTime ? parseInt(estimatedTime, 10) : null,
         description,
       };
 
@@ -175,27 +245,34 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
         updateData.submittedCompanyName = businessName;
       }
 
-      await toast.promise(updateTicket(ticket.id, updateData), {
-        loading: "Lagrer endringer...",
-        success: "Sak oppdatert",
-        error: "Kunne ikke oppdatere sak",
-      });
+      const response = await updateTicket(ticket.id, updateData);
 
-      // Success is handled by the toast
-      setHasChanges(false);
-      if (onTicketUpdated) onTicketUpdated();
+      toast.success("Sak oppdatert");
+
+      if (onTicketUpdated) {
+        onTicketUpdated();
+      }
     } catch (error) {
       console.error("Error updating ticket:", error);
+      toast.error("Kunne ikke oppdatere sak");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleEstimatedTimeChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    // Allow only numbers
+    const value = e.target.value.replace(/\D/g, "");
+    setEstimatedTime(value);
+  };
+
   return (
     <Drawer
       direction={isMobile ? "bottom" : "right"}
-      open={open}
-      onOpenChange={setOpen}
+      open={isOpen}
+      onOpenChange={setIsOpen}
     >
       <DrawerTrigger asChild>
         <Button variant="link" className="text-foreground w-fit px-0 text-left">
@@ -206,7 +283,7 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
         <DrawerHeader className="gap-1">
           <DrawerTitle>{ticket.title}</DrawerTitle>
           <DrawerDescription>
-            Opprettet {format(ticket.createdAt, "PPP")}
+            Opprettet {format(ticket.createdAt, "PPP", { locale: nb })}
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
@@ -271,24 +348,51 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="description">Beskrivelse</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="min-h-[120px]"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="dueDate">Frist</Label>
+                <DatePicker
+                  date={dueDate}
+                  onDateChange={handleDueDateChange}
+                  placeholder="Ingen frist satt"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="estimatedTime">Estimert tid (minutter)</Label>
+                <Input
+                  id="estimatedTime"
+                  name="estimatedTime"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={estimatedTime}
+                  onChange={handleEstimatedTimeChange}
+                  onBlur={handleEstimatedTimeBlur}
+                  placeholder="Estimert tid i minutter"
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="comment">Legg til kommentar</Label>
-              <Textarea
-                id="comment"
-                placeholder="Skriv kommentaren din her..."
-                className="min-h-[100px]"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="description">Beskrivelse</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="min-h-[120px]"
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="comment">Legg til kommentar</Label>
+                <Textarea
+                  id="comment"
+                  placeholder="Skriv kommentaren din her..."
+                  className="min-h-[100px]"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                />
+              </div>
             </div>
             {ticket.tags && ticket.tags.length > 0 && (
               <div className="flex flex-col gap-3">
@@ -316,7 +420,7 @@ export function TicketViewer({ ticket, onTicketUpdated }: TicketViewerProps) {
           )}
           <Button
             onClick={handleSubmitComment}
-            disabled={!comment.trim()}
+            disabled={!commentText.trim()}
             className="w-full sm:w-auto"
           >
             Send kommentar
