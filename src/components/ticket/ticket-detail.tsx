@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
+import { nb } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -67,6 +70,7 @@ interface Ticket {
   creatorId: string | null;
   comments: Comment[];
   tags: Tag[];
+  estimatedTime?: string;
 }
 
 interface TicketDetailProps {
@@ -80,6 +84,14 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [internalComment, setInternalComment] = useState(false);
+  const [dueDate, setDueDate] = useState<Date | undefined>(
+    ticket.dueDate ? new Date(ticket.dueDate) : undefined
+  );
+  const [estimatedTime, setEstimatedTime] = useState(
+    ticket.estimatedTime || ""
+  );
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+  const [isEditingEstimatedTime, setIsEditingEstimatedTime] = useState(false);
 
   async function handleStatusChange(newStatus: string) {
     if (newStatus === status) return;
@@ -87,13 +99,13 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
     try {
       await updateTicket(ticket.id, { status: newStatus });
       setStatus(newStatus);
-      toast.success("Status updated", {
-        description: `Ticket status changed to ${newStatus}`,
+      toast.success("Status oppdatert", {
+        description: `Billettens status endret til ${newStatus}`,
       });
       router.refresh();
     } catch (error) {
-      toast.error("Error updating status", {
-        description: "Failed to update ticket status.",
+      toast.error("Feil ved oppdatering av status", {
+        description: "Kunne ikke oppdatere billettens status.",
       });
     }
   }
@@ -104,13 +116,13 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
     try {
       await updateTicket(ticket.id, { priority: newPriority });
       setPriority(newPriority);
-      toast.success("Priority updated", {
-        description: `Ticket priority changed to ${newPriority}`,
+      toast.success("Prioritet oppdatert", {
+        description: `Billettens prioritet endret til ${newPriority}`,
       });
       router.refresh();
     } catch (error) {
-      toast.error("Error updating priority", {
-        description: "Failed to update ticket priority.",
+      toast.error("Feil ved oppdatering av prioritet", {
+        description: "Kunne ikke oppdatere billettens prioritet.",
       });
     }
   }
@@ -128,13 +140,13 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
       setComment("");
       setInternalComment(false);
-      toast.success("Comment added", {
-        description: "Your comment has been added to the ticket",
+      toast.success("Kommentar lagt til", {
+        description: "Din kommentar har blitt lagt til billetten",
       });
       router.refresh();
     } catch (error) {
-      toast.error("Error adding comment", {
-        description: "Failed to add comment to ticket.",
+      toast.error("Feil ved tillegging av kommentar", {
+        description: "Kunne ikke legge til kommentar på billetten.",
       });
     } finally {
       setIsSubmitting(false);
@@ -143,6 +155,49 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
   async function handleAssignBusiness() {
     router.push(`/tickets/${ticket.id}/assign-business`);
+  }
+
+  async function handleDueDateChange(date: Date | undefined) {
+    try {
+      const response = await updateTicket(ticket.id, { dueDate: date });
+
+      if (response.success) {
+        setDueDate(date);
+        setIsEditingDueDate(false);
+        toast.success("Frist oppdatert");
+        router.refresh();
+      } else {
+        toast.error("Feil ved oppdatering av frist", {
+          description: response.error || "Kunne ikke oppdatere frist",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating due date:", error);
+      toast.error("Feil ved oppdatering av frist");
+    }
+  }
+
+  async function handleEstimatedTimeChange(e: React.FormEvent) {
+    e.preventDefault();
+    const value = parseInt(estimatedTime as string, 10) || null;
+
+    try {
+      const response = await updateTicket(ticket.id, { estimatedTime: value });
+
+      if (response.success) {
+        // Only close editing mode and show toast if successful
+        setIsEditingEstimatedTime(false);
+        toast.success("Estimert tid oppdatert");
+        router.refresh();
+      } else {
+        toast.error("Feil ved oppdatering av estimert tid", {
+          description: response.error || "Kunne ikke oppdatere estimert tid",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating estimated time:", error);
+      toast.error("Feil ved oppdatering av estimert tid");
+    }
   }
 
   return (
@@ -176,13 +231,13 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
               <Tabs defaultValue="comments">
                 <TabsList>
-                  <TabsTrigger value="comments">Comments</TabsTrigger>
-                  <TabsTrigger value="activity">Activity Log</TabsTrigger>
+                  <TabsTrigger value="comments">Kommentarer</TabsTrigger>
+                  <TabsTrigger value="activity">Aktivitetslogg</TabsTrigger>
                 </TabsList>
                 <TabsContent value="comments" className="space-y-4 mt-4">
                   {ticket.comments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No comments yet
+                      Ingen kommentarer ennå
                     </p>
                   ) : (
                     <div className="space-y-4">
@@ -196,7 +251,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">
-                                User {comment.authorId.substring(0, 6)}
+                                Bruker {comment.authorId.substring(0, 6)}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 {formatDistanceToNow(
@@ -209,7 +264,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                                   variant="outline"
                                   className="text-xs bg-amber-100 text-amber-800"
                                 >
-                                  Internal
+                                  Intern
                                 </Badge>
                               )}
                             </div>
@@ -224,7 +279,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
                   <form onSubmit={handleCommentSubmit} className="space-y-2">
                     <Textarea
-                      placeholder="Add a comment..."
+                      placeholder="Legg til en kommentar..."
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       className="min-h-[100px]"
@@ -242,21 +297,21 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                           htmlFor="internal-comment"
                           className="text-sm text-muted-foreground"
                         >
-                          Internal note (not visible to customer)
+                          Internt notat (ikke synlig for kunden)
                         </label>
                       </div>
                       <Button
                         type="submit"
                         disabled={isSubmitting || !comment.trim()}
                       >
-                        {isSubmitting ? "Adding..." : "Add Comment"}
+                        {isSubmitting ? "Legger til..." : "Legg til kommentar"}
                       </Button>
                     </div>
                   </form>
                 </TabsContent>
                 <TabsContent value="activity">
                   <p className="text-sm text-muted-foreground">
-                    Activity log coming soon
+                    Aktivitetslogg kommer snart
                   </p>
                 </TabsContent>
               </Tabs>
@@ -268,7 +323,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Ticket Details</CardTitle>
+            <CardTitle>Billettdetaljer</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -279,58 +334,119 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="unassigned">Ikke tildelt</SelectItem>
+                    <SelectItem value="open">Åpen</SelectItem>
+                    <SelectItem value="in_progress">Under arbeid</SelectItem>
                     <SelectItem value="waiting_on_customer">
-                      Waiting on Customer
+                      Venter på kunde
                     </SelectItem>
                     <SelectItem value="waiting_on_third_party">
-                      Waiting on Third Party
+                      Venter på tredjepart
                     </SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
+                    <SelectItem value="resolved">Løst</SelectItem>
+                    <SelectItem value="closed">Lukket</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="text-muted-foreground">Priority</div>
+              <div className="text-muted-foreground">Prioritet</div>
               <div className="text-right">
                 <Select value={priority} onValueChange={handlePriorityChange}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="low">Lav</SelectItem>
+                    <SelectItem value="medium">Middels</SelectItem>
+                    <SelectItem value="high">Høy</SelectItem>
+                    <SelectItem value="urgent">Kritisk</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="text-muted-foreground">Created</div>
+              <div className="text-muted-foreground">Opprettet</div>
               <div className="text-right">
-                {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+                {format(new Date(ticket.createdAt), "d. MMM yyyy", {
+                  locale: nb,
+                })}
               </div>
 
               {ticket.resolvedAt && (
                 <>
-                  <div className="text-muted-foreground">Resolved</div>
+                  <div className="text-muted-foreground">Løst</div>
                   <div className="text-right">
-                    {format(new Date(ticket.resolvedAt), "MMM d, yyyy")}
+                    {format(new Date(ticket.resolvedAt), "d. MMM yyyy", {
+                      locale: nb,
+                    })}
                   </div>
                 </>
               )}
 
-              {ticket.dueDate && (
-                <>
-                  <div className="text-muted-foreground">Due Date</div>
-                  <div className="text-right">
-                    {format(new Date(ticket.dueDate), "MMM d, yyyy")}
+              {/* Due Date section with edit capability */}
+              <div className="text-muted-foreground">Forfallsdato</div>
+              <div className="text-right flex justify-end items-center gap-2">
+                {isEditingDueDate ? (
+                  <div className="w-[180px]">
+                    <DatePicker
+                      date={dueDate}
+                      onDateChange={handleDueDateChange}
+                      placeholder="Ingen frist satt"
+                    />
                   </div>
-                </>
-              )}
+                ) : (
+                  <>
+                    {ticket.dueDate
+                      ? format(new Date(ticket.dueDate), "d. MMM yyyy", {
+                          locale: nb,
+                        })
+                      : "Ingen frist satt"}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsEditingDueDate(true)}
+                      className="h-5 w-5"
+                    >
+                      ✏️
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Estimated Time section with edit capability */}
+              <div className="text-muted-foreground">Estimert tid</div>
+              <div className="text-right flex justify-end items-center gap-2">
+                {isEditingEstimatedTime ? (
+                  <form
+                    onSubmit={handleEstimatedTimeChange}
+                    className="flex w-[180px]"
+                  >
+                    <Input
+                      type="number"
+                      value={estimatedTime}
+                      onChange={(e) => setEstimatedTime(e.target.value)}
+                      placeholder="Minutter"
+                      className="h-8"
+                    />
+                    <Button type="submit" size="sm" className="ml-1 h-8">
+                      OK
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    {ticket.estimatedTime
+                      ? `${ticket.estimatedTime} minutter`
+                      : "Ikke satt"}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsEditingEstimatedTime(true)}
+                      className="h-5 w-5"
+                    >
+                      ✏️
+                    </Button>
+                  </>
+                )}
+              </div>
 
               <div className="col-span-2 mt-2">
                 <Separator />
@@ -338,7 +454,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium">Business</div>
+              <div className="text-sm font-medium">Bedrift</div>
               {ticket.business ? (
                 <div className="text-sm">
                   <Link
@@ -354,7 +470,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
               ) : (
                 <div className="text-sm">
                   <div className="text-muted-foreground">
-                    {ticket.submittedCompanyName || "Unknown"}
+                    {ticket.submittedCompanyName || "Ukjent"}
                   </div>
                   <Button
                     variant="outline"
@@ -362,14 +478,14 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                     className="mt-2 w-full"
                     onClick={handleAssignBusiness}
                   >
-                    Assign to Business
+                    Tildel til bedrift
                   </Button>
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium">Contact</div>
+              <div className="text-sm font-medium">Kontakt</div>
               {ticket.contact ? (
                 <div className="text-sm">
                   <div className="font-medium">{ticket.contact.name}</div>
@@ -379,7 +495,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  {ticket.submitterName || "No contact assigned"}
+                  {ticket.submitterName || "Ingen kontakt tildelt"}
                   {ticket.submitterEmail && <div>{ticket.submitterEmail}</div>}
                 </div>
               )}
@@ -389,17 +505,17 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Actions</CardTitle>
+            <CardTitle>Handlinger</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <Button className="w-full" variant="outline">
-              Assign to Agent
+              Tildel til agent
             </Button>
             <Button className="w-full" variant="outline">
-              Merge Ticket
+              Slå sammen billett
             </Button>
             <Button className="w-full" variant="destructive">
-              Delete Ticket
+              Slett billett
             </Button>
           </CardContent>
         </Card>

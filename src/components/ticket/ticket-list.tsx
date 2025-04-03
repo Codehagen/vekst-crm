@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
-import { getTickets } from "@/app/actions/tickets";
+import { getTickets, updateTicketStatus } from "@/app/actions/tickets";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 
 // Ticket type definition
 interface Ticket {
@@ -27,8 +35,8 @@ interface Ticket {
   description: string;
   status: string;
   priority: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
   business?: {
     id: string;
     name: string;
@@ -43,6 +51,7 @@ export function TicketList() {
   const status = searchParams.get("status");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchTickets() {
@@ -61,6 +70,30 @@ export function TicketList() {
 
     fetchTickets();
   }, [status]);
+
+  // Handle actions
+  const handleViewTicket = (id: string) => {
+    router.push(`/tickets/${id}`);
+  };
+
+  const handleEditTicket = (id: string) => {
+    router.push(`/tickets/${id}/edit`);
+  };
+
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      const result = await updateTicketStatus(id, newStatus);
+      if (result.success) {
+        // Refresh tickets after status update
+        const data = await getTickets({
+          status: status && status !== "all" ? status : undefined,
+        });
+        setTickets(data);
+      }
+    } catch (error) {
+      console.error(`Error updating ticket status:`, error);
+    }
+  };
 
   return (
     <Card>
@@ -137,9 +170,52 @@ export function TicketList() {
                     })}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/tickets/${ticket.id}`}>View</Link>
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 p-0"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                          <span className="sr-only">Åpne meny</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[160px]">
+                        <DropdownMenuItem
+                          onClick={() => handleViewTicket(ticket.id)}
+                        >
+                          Vis detaljer
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleEditTicket(ticket.id)}
+                        >
+                          Rediger sak
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleUpdateStatus(ticket.id, "in_progress")
+                          }
+                        >
+                          Merk som pågående
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleUpdateStatus(ticket.id, "resolved")
+                          }
+                        >
+                          Merk som løst
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleUpdateStatus(ticket.id, "closed")
+                          }
+                        >
+                          Lukk sak
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

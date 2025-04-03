@@ -669,9 +669,9 @@ export async function syncEmails(params: SyncEmailsParams = {}) {
     // Fetch emails based on provider type
     let rawEmails: { id: string; raw: string }[] = [];
 
-    if (user.emailProvider.provider === "google") {
+    if (user.emailProvider?.provider === "google") {
       rawEmails = await fetchEmailsFromGmail(user.emailProvider, options);
-    } else if (user.emailProvider.provider === "microsoft") {
+    } else if (user.emailProvider?.provider === "microsoft") {
       rawEmails = await fetchEmailsFromOutlook(user.emailProvider, options);
     } else {
       throw new Error("Unsupported email provider");

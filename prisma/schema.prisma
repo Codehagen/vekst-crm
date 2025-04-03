@@ -15,6 +15,44 @@ datasource db {
   // Used for direct database connections
 }
 
+// Workspace model - Represents the main business that pays for the service
+model Workspace {
+  id         String    @id @default(cuid())
+  name       String
+  orgNumber  String?   @unique
+  address    String?
+  postalCode String?
+  city       String?
+  country    String?
+  email      String?
+  phone      String?
+  website    String?
+  logo       String? // URL to logo image
+  plan       String    @default("free") // free, basic, premium, enterprise
+  planExpiry DateTime?
+  maxUsers   Int       @default(5)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Relations
+  users        User[]
+  businesses   Business[]
+  applications JobApplication[]
+  tickets      Ticket[]
+
+  @@map("workspaces")
+}
+
+// Workspace Role enum - defines user roles within a workspace
+enum WorkspaceRole {
+  admin // Full access to workspace settings and all data
+  manager // Access to all data but limited workspace settings
+  member // Regular access to assigned data
+  viewer // Read-only access
+
+  @@map("workspace_role")
+}
+
 // Unified Business/Lead model - Represents companies at any stage (lead to customer)
 
 model Business {
@@ -58,6 +96,10 @@ model Business {
   // SMS-related fields
   smsOptIn Boolean @default(false)
 
+  // Workspace relation
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
   // Relations
   contacts    Contact[]
   activities  Activity[]
@@ -67,6 +109,7 @@ model Business {
   emailSyncs  EmailSync[]
   smsMessages SmsMessage[]
 
+  @@index([workspaceId])
   @@map("businesses")
 }
 
@@ -238,9 +281,14 @@ model JobApplication {
   updatedAt       DateTime             @updatedAt
   status          JobApplicationStatus @default(new)
 
+  // Workspace relation
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
   // Relations
   activities Activity[]
 
+  @@index([workspaceId])
   @@map("job_applications")
 }
 
@@ -258,15 +306,16 @@ enum JobApplicationStatus {
 // Ticket system models
 
 model Ticket {
-  id          String       @id @default(cuid())
-  title       String
-  description String
-  status      TicketStatus @default(unassigned)
-  priority    Priority     @default(medium)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  dueDate     DateTime?
-  resolvedAt  DateTime?
+  id            String       @id @default(cuid())
+  title         String
+  description   String
+  status        TicketStatus @default(unassigned)
+  priority      Priority     @default(medium)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  dueDate       DateTime?
+  resolvedAt    DateTime?
+  estimatedTime Int? // Estimated time in minutes
 
   // Submission metadata
   submitterName        String?
@@ -281,11 +330,16 @@ model Ticket {
   assigneeId String? // ID of user assigned to ticket
   creatorId  String? // ID of user who created ticket
 
+  // Direct workspace relation
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
   // Child relations
   comments   TicketComment[]
   activities Activity[]
   tags       Tag[]           @relation("TicketToTag")
 
+  @@index([workspaceId])
   @@map("tickets")
 }
 
@@ -335,6 +389,8 @@ model User {
   jobTitle      String?
   company       String?
   workspaceId   String?
+  workspace     Workspace?     @relation(fields: [workspaceId], references: [id])
+  workspaceRole WorkspaceRole  @default(member)
   department    String?
   timezone      String?
   bio           String?
@@ -347,6 +403,7 @@ model User {
   emailSyncs    EmailSync[]
 
   @@unique([email])
+  @@index([workspaceId])
   @@map("user")
 }
 

@@ -16,13 +16,13 @@ export function TicketStatusFilter() {
 
   const statuses = [
     { value: "all", label: "All Tickets" },
-    { value: "unassigned", label: "Unassigned" },
-    { value: "open", label: "Open" },
-    { value: "in_progress", label: "In Progress" },
-    { value: "waiting_on_customer", label: "Waiting on Customer" },
-    { value: "waiting_on_third_party", label: "Waiting on Third Party" },
-    { value: "resolved", label: "Resolved" },
-    { value: "closed", label: "Closed" },
+    { value: "unassigned", label: "Ikke tildelt" },
+    { value: "open", label: "Åpen" },
+    { value: "in_progress", label: "Under arbeid" },
+    { value: "waiting_on_customer", label: "Venter på kunde" },
+    { value: "waiting_on_third_party", label: "Venter på tredjepart" },
+    { value: "resolved", label: "Løst" },
+    { value: "closed", label: "Lukket" },
   ];
 
   function handleStatusChange(value: string) {

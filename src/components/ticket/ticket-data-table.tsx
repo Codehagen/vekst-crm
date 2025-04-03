@@ -49,30 +49,13 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { format } from "date-fns";
+import { nb } from "date-fns/locale";
 import { toast } from "sonner";
-import { z } from "zod";
 
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -102,35 +85,62 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
+import { Ticket } from "@/app/actions/tickets";
+
 import {
-  Ticket,
   assignTicket,
   updateTicketStatus,
   addTicketComment,
-} from "@/lib/actions/ticket-actions";
+  updateTicket,
+  createTicket,
+  getWorkspaceUsers,
+  deleteTickets,
+} from "@/app/actions/tickets";
+import { getAllBusinesses } from "@/app/actions/businesses/actions";
+import { UserAssignSelect } from "./user-assign-select";
 
-// Define the ticket schema for client-side validation
-export const ticketSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string(),
-  status: z.string(),
-  priority: z.string(),
-  businessName: z.string().nullable(),
-  contactName: z.string().nullable(),
-  assignee: z.string().nullable(),
-  creator: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  dueDate: z.date().nullable(),
-  tags: z.array(z.string()),
-  commentCount: z.number().default(0),
-});
+import { AddTicketSheet } from "./add-ticket-sheet";
+import { TicketViewer } from "./ticket-viewer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-// Use the imported Ticket type instead of the schema inference
-// export type Ticket = z.infer<typeof ticketSchema>
+// Status text mapping
+const statusMap: Record<string, string> = {
+  unassigned: "Ikke tildelt",
+  open: "Åpen",
+  in_progress: "Under arbeid",
+  waiting_on_customer: "Venter på kunde",
+  waiting_on_third_party: "Venter på tredjepart",
+  resolved: "Løst",
+  closed: "Lukket",
+};
+
+// Status color mapping for loader icons
+const statusColorMap: Record<string, string> = {
+  unassigned: "text-gray-500",
+  open: "text-blue-500",
+  in_progress: "text-yellow-500",
+  waiting_on_customer: "text-purple-500",
+  waiting_on_third_party: "text-orange-500",
+  resolved: "fill-green-500 dark:fill-green-400",
+  closed: "fill-green-500 dark:fill-green-400",
+};
+
+// Priority text mapping
+const priorityMap: Record<string, string> = {
+  low: "Lav",
+  medium: "Middels",
+  high: "Høy",
+  urgent: "Kritisk",
+};
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: string }) {
@@ -147,7 +157,7 @@ function DragHandle({ id }: { id: string }) {
       className="text-muted-foreground size-7 hover:bg-transparent"
     >
       <IconGripVertical className="text-muted-foreground size-3" />
-      <span className="sr-only">Drag to reorder</span>
+      <span className="sr-only">Dra for å omorganisere</span>
     </Button>
   );
 }
@@ -169,7 +179,7 @@ const columns: ColumnDef<Ticket>[] = [
             (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label="Velg alle"
         />
       </div>
     ),
@@ -178,7 +188,7 @@ const columns: ColumnDef<Ticket>[] = [
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label="Velg rad"
         />
       </div>
     ),
@@ -187,9 +197,14 @@ const columns: ColumnDef<Ticket>[] = [
   },
   {
     accessorKey: "title",
-    header: "Title",
+    header: "Tittel",
     cell: ({ row }) => {
-      return <TicketViewer ticket={row.original} />;
+      return (
+        <TicketViewer
+          ticket={row.original}
+          onTicketUpdated={() => window.location.reload()}
+        />
+      );
     },
     enableHiding: false,
   },
@@ -203,10 +218,15 @@ const columns: ColumnDef<Ticket>[] = [
           row.original.status === "closed" ? (
             <IconCircleCheckFilled className="mr-1 fill-green-500 dark:fill-green-400 size-4" />
           ) : (
-            <IconLoader className="mr-1 size-4" />
+            <IconLoader
+              className={`mr-1 size-4 ${
+                statusColorMap[row.original.status] || ""
+              }`}
+            />
           )}
-          <span className="capitalize">
-            {row.original.status.replace(/_/g, " ")}
+          <span>
+            {statusMap[row.original.status] ||
+              row.original.status.replace(/_/g, " ")}
           </span>
         </Badge>
       </div>
@@ -214,38 +234,47 @@ const columns: ColumnDef<Ticket>[] = [
   },
   {
     accessorKey: "priority",
-    header: "Priority",
+    header: "Prioritet",
     cell: ({ row }) => (
       <div className="w-32">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          <span className="capitalize">{row.original.priority}</span>
-        </Badge>
+        <PriorityBadge priority={row.original.priority} />
       </div>
     ),
   },
   {
     accessorKey: "businessName",
-    header: "Business",
+    header: "Bedrift",
     cell: ({ row }) => (
       <div className="max-w-[180px] truncate">
-        {row.original.businessName || "Unassigned"}
+        {row.original.businessName || "Ikke tildelt"}
       </div>
     ),
   },
   {
     accessorKey: "dueDate",
-    header: "Due Date",
+    header: "Frist",
     cell: ({ row }) => (
       <div className="min-w-[100px]">
         {row.original.dueDate
-          ? format(row.original.dueDate, "MMM d, yyyy")
-          : "No date set"}
+          ? format(row.original.dueDate, "d. MMM yyyy", { locale: nb })
+          : "Ingen frist satt"}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "estimatedTime",
+    header: "Estimert tid",
+    cell: ({ row }) => (
+      <div className="min-w-[80px]">
+        {row.original.estimatedTime
+          ? `${row.original.estimatedTime} min`
+          : "Ikke satt"}
       </div>
     ),
   },
   {
     accessorKey: "assignee",
-    header: "Assignee",
+    header: "Tildelt til",
     cell: ({ row }) => {
       const isAssigned = !!row.original.assignee;
 
@@ -254,28 +283,10 @@ const columns: ColumnDef<Ticket>[] = [
       }
 
       return (
-        <>
-          <Label htmlFor={`${row.original.id}-assignee`} className="sr-only">
-            Assignee
-          </Label>
-          <Select
-            onValueChange={(value) =>
-              handleTicketAssignee(row.original.id, value)
-            }
-          >
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              id={`${row.original.id}-assignee`}
-            >
-              <SelectValue placeholder="Assign ticket" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="user123">John Doe</SelectItem>
-              <SelectItem value="user456">Jane Smith</SelectItem>
-              <SelectItem value="user789">Alex Johnson</SelectItem>
-            </SelectContent>
-          </Select>
-        </>
+        <UserAssignSelect
+          ticketId={row.original.id}
+          onAssign={handleTicketAssignee}
+        />
       );
     },
   },
@@ -290,31 +301,31 @@ const columns: ColumnDef<Ticket>[] = [
             size="icon"
           >
             <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">Åpne meny</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onClick={() => handleViewTicket(row.original.id)}>
-            View Details
+            Vis detaljer
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleEditTicket(row.original.id)}>
-            Edit Ticket
+            Rediger sak
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "in_progress")}
           >
-            Mark In Progress
+            Merk som under arbeid
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "resolved")}
           >
-            Mark Resolved
+            Merk som løst
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => handleUpdateStatus(row.original.id, "closed")}
           >
-            Close Ticket
+            Lukk sak
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -325,9 +336,9 @@ const columns: ColumnDef<Ticket>[] = [
 // Action handlers that call server actions
 async function handleTicketAssignee(ticketId: string, assigneeId: string) {
   toast.promise(assignTicket(ticketId, assigneeId), {
-    loading: `Assigning ticket...`,
-    success: `Ticket assigned successfully`,
-    error: "Failed to assign ticket",
+    loading: `Tildeler sak...`,
+    success: `Sak tildelt`,
+    error: "Kunne ikke tildele sak",
   });
 }
 
@@ -343,26 +354,23 @@ function handleEditTicket(ticketId: string) {
 
 async function handleUpdateStatus(ticketId: string, status: string) {
   toast.promise(updateTicketStatus(ticketId, status), {
-    loading: `Updating ticket status...`,
-    success: `Ticket status updated to ${status}`,
-    error: "Failed to update ticket status",
+    loading: `Oppdaterer status...`,
+    success: `Status oppdatert til ${statusMap[status] || status}`,
+    error: "Kunne ikke oppdatere status",
   });
 }
 
 async function handleAddComment(ticketId: string, content: string) {
   if (!content.trim()) {
-    toast.error("Comment cannot be empty");
+    toast.error("Kommentar kan ikke være tom");
     return;
   }
 
-  toast.promise(
-    addTicketComment(ticketId, content, "current-user", false), // Replace "current-user" with actual user ID
-    {
-      loading: "Adding comment...",
-      success: "Comment added successfully",
-      error: "Failed to add comment",
-    }
-  );
+  toast.promise(addTicketComment(ticketId, content, undefined, false), {
+    loading: "Legger til kommentar...",
+    success: "Kommentar lagt til",
+    error: "Kunne ikke legge til kommentar",
+  });
 }
 
 function DraggableRow({ row }: { row: Row<Ticket> }) {
@@ -441,6 +449,9 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (active && over && active.id !== over.id) {
@@ -491,6 +502,37 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
     table.resetColumnFilters();
   };
 
+  // Handler for deleting selected tickets
+  async function handleDeleteSelected() {
+    const selectedRowIds = Object.keys(rowSelection);
+    if (selectedRowIds.length === 0) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteTickets(selectedRowIds);
+
+      if (response.success) {
+        toast.success(
+          `${response.count} ${response.count === 1 ? "sak" : "saker"} slettet`
+        );
+        // Remove deleted tickets from the table data
+        setData((currentData) =>
+          currentData.filter((row) => !selectedRowIds.includes(row.id))
+        );
+        // Clear row selection
+        setRowSelection({});
+      } else {
+        toast.error(response.error || "Kunne ikke slette saker");
+      }
+    } catch (error) {
+      console.error("Error deleting tickets:", error);
+      toast.error("En feil oppstod ved sletting av saker");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  }
+
   return (
     <Tabs
       defaultValue="all"
@@ -499,38 +541,88 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
       className="w-full flex-col justify-start gap-6"
     >
       <div className="flex items-center justify-between px-4 lg:px-6">
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Søk i saker..."
+            className="w-[180px]"
+            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+            onChange={(e) =>
+              table.getColumn("title")?.setFilterValue(e.target.value)
+            }
+          />
+        </div>
+
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
           <TabsTrigger value="all">
-            All Tickets <Badge variant="secondary">{statusCounts.all}</Badge>
+            Alle saker <Badge variant="secondary">{statusCounts.all}</Badge>
           </TabsTrigger>
           <TabsTrigger value="open">
-            Open <Badge variant="secondary">{statusCounts.open}</Badge>
+            Åpne <Badge variant="secondary">{statusCounts.open}</Badge>
           </TabsTrigger>
           <TabsTrigger value="in_progress">
-            In Progress{" "}
+            Pågående{" "}
             <Badge variant="secondary">{statusCounts.in_progress}</Badge>
           </TabsTrigger>
           <TabsTrigger value="waiting_on_customer">
-            Waiting on Customer{" "}
+            Venter på kunde{" "}
             <Badge variant="secondary">
               {statusCounts.waiting_on_customer}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="resolved">
-            Resolved <Badge variant="secondary">{statusCounts.resolved}</Badge>
+            Løst <Badge variant="secondary">{statusCounts.resolved}</Badge>
           </TabsTrigger>
           <TabsTrigger value="closed">
-            Closed <Badge variant="secondary">{statusCounts.closed}</Badge>
+            Lukket <Badge variant="secondary">{statusCounts.closed}</Badge>
           </TabsTrigger>
         </TabsList>
 
         <div className="flex items-center gap-2">
+          {Object.keys(rowSelection).length > 0 && (
+            <Dialog
+              open={isDeleteDialogOpen}
+              onOpenChange={setIsDeleteDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Slett ({Object.keys(rowSelection).length})
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Slett saker</DialogTitle>
+                  <DialogDescription>
+                    Er du sikker på at du vil slette{" "}
+                    {Object.keys(rowSelection).length}{" "}
+                    {Object.keys(rowSelection).length === 1 ? "sak" : "saker"}?
+                    Denne handlingen kan ikke angres.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(false)}
+                    disabled={isDeleting}
+                  >
+                    Avbryt
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteSelected}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Sletter..." : "Slett"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <IconLayoutColumns className="mr-2 h-4 w-4" />
-                <span className="hidden lg:inline">Customize Columns</span>
-                <span className="lg:hidden">Columns</span>
+                <span className="hidden lg:inline">Tilpass kolonner</span>
+                <span className="lg:hidden">Kolonner</span>
                 <IconChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -558,25 +650,18 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm">
-            <IconPlus className="mr-2 h-4 w-4" />
-            <span className="hidden lg:inline">Add Ticket</span>
-          </Button>
+          <AddTicketSheet
+            onTicketCreated={() => {
+              // Refresh data after a new ticket is created
+              // This assumes there is a function to reload data or the component will be refreshed by the parent
+              window.location.reload();
+            }}
+          />
         </div>
       </div>
 
       {/* Main content area */}
       <div className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
-        <div className="flex items-center gap-4 mb-4">
-          <Input
-            placeholder="Search tickets..."
-            className="max-w-sm"
-            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-            onChange={(e) =>
-              table.getColumn("title")?.setFilterValue(e.target.value)
-            }
-          />
-        </div>
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
@@ -620,7 +705,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                       colSpan={columns.length}
                       className="h-24 text-center"
                     >
-                      No tickets found.
+                      Ingen saker funnet.
                     </TableCell>
                   </TableRow>
                 )}
@@ -630,13 +715,13 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
         </div>
         <div className="flex items-center justify-between px-4">
           <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} ticket(s) selected.
+            {table.getFilteredSelectedRowModel().rows.length} av{" "}
+            {table.getFilteredRowModel().rows.length} sak(er) valgt.
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
               <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
+                Rader per side
               </Label>
               <Select
                 value={`${table.getState().pagination.pageSize}`}
@@ -659,7 +744,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
               </Select>
             </div>
             <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              Side {table.getState().pagination.pageIndex + 1} av{" "}
               {table.getPageCount()}
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
@@ -670,7 +755,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">Gå til første side</span>
                 <IconChevronsLeft className="h-4 w-4" />
               </Button>
               <Button
@@ -680,7 +765,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">Gå til forrige side</span>
                 <IconChevronLeft className="h-4 w-4" />
               </Button>
               <Button
@@ -690,7 +775,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">Gå til neste side</span>
                 <IconChevronRight className="h-4 w-4" />
               </Button>
               <Button
@@ -700,7 +785,7 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">Gå til siste side</span>
                 <IconChevronsRight className="h-4 w-4" />
               </Button>
             </div>
@@ -708,143 +793,5 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
         </div>
       </div>
     </Tabs>
-  );
-}
-
-function TicketViewer({ ticket }: { ticket: Ticket }) {
-  const isMobile = useIsMobile();
-  const [open, setOpen] = React.useState(false);
-  const [comment, setComment] = React.useState("");
-
-  const handleSubmitComment = async () => {
-    await handleAddComment(ticket.id, comment);
-    setComment(""); // Clear the comment field after submission
-  };
-
-  return (
-    <Drawer
-      direction={isMobile ? "bottom" : "right"}
-      open={open}
-      onOpenChange={setOpen}
-    >
-      <DrawerTrigger asChild>
-        <Button variant="link" className="text-foreground w-fit px-0 text-left">
-          {ticket.title}
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>{ticket.title}</DrawerTitle>
-          <DrawerDescription>
-            Created on {format(ticket.createdAt, "PPP")}
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          <div className="grid gap-2">
-            <div className="flex gap-2 leading-none font-medium">
-              Ticket Details
-            </div>
-          </div>
-          <Separator />
-          <form className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select defaultValue={ticket.status}>
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="waiting_on_customer">
-                      Waiting on Customer
-                    </SelectItem>
-                    <SelectItem value="waiting_on_third_party">
-                      Waiting on Third Party
-                    </SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="priority">Priority</Label>
-                <Select defaultValue={ticket.priority}>
-                  <SelectTrigger id="priority" className="w-full">
-                    <SelectValue placeholder="Select a priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="business">Business</Label>
-                <Input
-                  id="business"
-                  defaultValue={ticket.businessName || ""}
-                  placeholder="Assign to business"
-                />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="assignee">Assignee</Label>
-                <Select defaultValue={ticket.assignee || ""}>
-                  <SelectTrigger id="assignee" className="w-full">
-                    <SelectValue placeholder="Assign ticket" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user123">John Doe</SelectItem>
-                    <SelectItem value="user456">Jane Smith</SelectItem>
-                    <SelectItem value="user789">Alex Johnson</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                defaultValue={ticket.description}
-                className="min-h-[120px]"
-              />
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="comment">Add a comment</Label>
-              <Textarea
-                id="comment"
-                placeholder="Type your comment here..."
-                className="min-h-[100px]"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
-            </div>
-            {ticket.tags.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <Label>Tags</Label>
-                <div className="flex flex-wrap gap-2">
-                  {ticket.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </form>
-        </div>
-        <DrawerFooter>
-          <Button onClick={handleSubmitComment}>Submit Comment</Button>
-          <DrawerClose asChild>
-            <Button variant="outline">Close</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
   );
 }

@@ -4,18 +4,50 @@ import { revalidatePath } from "next/cache";
 import { JobApplication, JobApplicationStatus, Activity } from "@prisma/client";
 import { jobApplicationService } from "@/lib/services";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { headers } from "next/headers";
+
+/**
+ * Get current user's workspace ID
+ */
+async function getCurrentUserWorkspaceId(): Promise<string> {
+  const session = await getSession({
+    headers: await headers(),
+  });
+
+  if (!session?.user?.id) {
+    throw new Error("Authentication required");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { workspaceId: true },
+  });
+
+  if (!user?.workspaceId) {
+    throw new Error("No workspace found for user");
+  }
+
+  return user.workspaceId;
+}
 
 // Get all applications with optional filtering
 export async function getApplications(status?: JobApplicationStatus) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
     let applications;
 
     if (status) {
       applications = await jobApplicationService.getJobApplicationsByStatus(
-        status
+        status,
+        workspaceId
       );
     } else {
-      applications = await jobApplicationService.getJobApplications();
+      applications = await jobApplicationService.getJobApplications(
+        workspaceId
+      );
     }
 
     return applications;
@@ -28,7 +60,13 @@ export async function getApplications(status?: JobApplicationStatus) {
 // Get a single application by ID with related activities
 export async function getApplicationById(id: string) {
   try {
-    const application = await jobApplicationService.getJobApplicationById(id);
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    const application = await jobApplicationService.getJobApplicationById(
+      id,
+      workspaceId
+    );
 
     if (!application) {
       throw new Error("Application not found");
@@ -36,7 +74,9 @@ export async function getApplicationById(id: string) {
 
     // Get activities for this application
     const activities = await prisma.activity.findMany({
-      where: { jobApplicationId: id },
+      where: {
+        jobApplicationId: id,
+      },
       orderBy: { date: "desc" },
     });
 
@@ -56,8 +96,25 @@ export async function updateApplicationStatus(
   status: JobApplicationStatus
 ) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Verify application exists and belongs to workspace
+    const application = await jobApplicationService.getJobApplicationById(
+      id,
+      workspaceId
+    );
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
     const updatedApplication =
-      await jobApplicationService.updateJobApplicationStatus(id, status);
+      await jobApplicationService.updateJobApplicationStatus(
+        id,
+        status,
+        workspaceId
+      );
 
     // Create an activity to log this status change
     await prisma.activity.create({
@@ -108,6 +165,19 @@ export async function addApplicationActivity(
   >
 ) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Verify application exists and belongs to workspace
+    const application = await jobApplicationService.getJobApplicationById(
+      jobApplicationId,
+      workspaceId
+    );
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
     const activity = await prisma.activity.create({
       data: {
         ...activityData,
@@ -128,8 +198,12 @@ export async function addApplicationActivity(
 // Search applications
 export async function searchApplications(searchTerm: string) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
     const applications = await jobApplicationService.searchJobApplications(
-      searchTerm
+      searchTerm,
+      workspaceId
     );
     return applications;
   } catch (error) {
@@ -141,11 +215,25 @@ export async function searchApplications(searchTerm: string) {
 // Add note to an application
 export async function addApplicationNote(id: string, note: string) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Verify application exists and belongs to workspace
+    const application = await jobApplicationService.getJobApplicationById(
+      id,
+      workspaceId
+    );
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
     const updatedApplication = await jobApplicationService.updateJobApplication(
       id,
       {
         notes: note,
-      }
+      },
+      workspaceId
     );
 
     revalidatePath(`/applications/${id}`);
@@ -163,9 +251,23 @@ export async function updateApplication(
   data: Partial<Omit<JobApplication, "id" | "createdAt" | "updatedAt">>
 ) {
   try {
+    // Get workspace ID for filtering
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Verify application exists and belongs to workspace
+    const application = await jobApplicationService.getJobApplicationById(
+      id,
+      workspaceId
+    );
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
     const updatedApplication = await jobApplicationService.updateJobApplication(
       id,
-      data
+      data,
+      workspaceId
     );
 
     revalidatePath(`/applications/${id}`);
@@ -175,5 +277,42 @@ export async function updateApplication(
   } catch (error) {
     console.error(`Error updating application:`, error);
     throw new Error("Failed to update application");
+  }
+}
+
+// Create a new application
+export async function createApplication(
+  data: Omit<JobApplication, "id" | "createdAt" | "updatedAt" | "activities">
+) {
+  try {
+    // Get workspace ID for the new application
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Create application with workspace relationship
+    // (omit workspaceId if the schema doesn't have it yet)
+    const applicationData = {
+      ...data,
+    } as Omit<JobApplication, "id" | "createdAt" | "updatedAt">;
+
+    // Add workspaceId if the data object accepts it
+    try {
+      // Type assertion to add workspaceId - this might fail if schema doesn't support it
+      (applicationData as any).workspaceId = workspaceId;
+    } catch (e) {
+      console.warn(
+        "Could not add workspaceId to application, schema may not support it yet"
+      );
+    }
+
+    const application = await jobApplicationService.createJobApplication(
+      applicationData
+    );
+
+    revalidatePath("/applications");
+
+    return application;
+  } catch (error) {
+    console.error("Error creating application:", error);
+    throw new Error("Failed to create application");
   }
 }
