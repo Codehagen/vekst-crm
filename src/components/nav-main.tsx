@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react";
+import { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 
 interface NavMainProps {
   items: {
@@ -18,6 +20,7 @@ interface NavMainProps {
     url: string;
     icon: Icon;
     isActive?: boolean;
+    badge?: number | ReactNode;
   }[];
 }
 
@@ -51,6 +54,20 @@ export function NavMain({ items }: NavMainProps) {
                 <Link href={item.url}>
                   {item.icon && <item.icon />}
                   <span>{item.title}</span>
+                  {item.badge && (
+                    <span className="ml-auto">
+                      {typeof item.badge === "number" && item.badge > 0 ? (
+                        <Badge
+                          variant="secondary"
+                          className="bg-primary text-primary-foreground h-5 min-w-5 flex items-center justify-center text-xs"
+                        >
+                          {item.badge}
+                        </Badge>
+                      ) : (
+                        item.badge
+                      )}
+                    </span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -16,6 +16,7 @@ import {
   IconUserCircle,
   IconBuildingSkyscraper,
   IconAd,
+  IconInbox,
 } from "@tabler/icons-react";
 
 import {
@@ -32,6 +33,8 @@ import { NavUser } from "@/components/nav-user";
 import { NavDocuments } from "./nav-documents";
 import { NavSecondary } from "./nav-secondary";
 import { useSession } from "@/lib/auth/client";
+import { TicketBadge } from "./ticket-badge";
+import { InboxBadge } from "./inbox-badge";
 
 const data = {
   navMain: [
@@ -39,6 +42,12 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: IconDashboard,
+    },
+    {
+      title: "Inbox",
+      url: "/inbox",
+      icon: IconInbox,
+      badge: <InboxBadge />,
     },
     {
       title: "Leads",
@@ -71,6 +80,7 @@ const data = {
       name: "Tickets",
       url: "/tickets",
       icon: IconTicket,
+      badge: <TicketBadge />,
     },
     {
       name: "Email",

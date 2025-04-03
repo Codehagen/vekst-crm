@@ -24,6 +24,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
+import { ReactNode } from "react";
 
 interface NavDocumentsProps {
   items: {
@@ -31,6 +33,7 @@ interface NavDocumentsProps {
     url: string;
     icon: Icon;
     isActive?: boolean;
+    badge?: number | ReactNode;
   }[];
   title?: string;
 }
@@ -51,6 +54,20 @@ export function NavDocuments({
               <Link href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
+                {item.badge && (
+                  <span className="ml-auto">
+                    {typeof item.badge === "number" && item.badge > 0 ? (
+                      <Badge
+                        variant="secondary"
+                        className="bg-primary text-primary-foreground h-5 min-w-5 flex items-center justify-center text-xs"
+                      >
+                        {item.badge}
+                      </Badge>
+                    ) : (
+                      item.badge
+                    )}
+                  </span>
+                )}
               </Link>
             </SidebarMenuButton>
             <DropdownMenu>

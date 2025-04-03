@@ -959,3 +959,127 @@ export async function addTicketComment(
     return { success: false, error: "Failed to add comment" };
   }
 }
+
+/**
+ * Get the count of open tickets for the current user's workspace
+ */
+export async function getOpenTicketsCount(): Promise<number> {
+  try {
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    const count = await prisma.ticket.count({
+      where: {
+        status: "open", // Assuming "open" is the status for open tickets
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
+      },
+    });
+
+    return count;
+  } catch (error) {
+    console.error("Failed to get open tickets count:", error);
+    return 0;
+  }
+}
+
+/**
+ * Get tickets assigned to the current user
+ */
+export async function getUserAssignedTickets(): Promise<Ticket[]> {
+  try {
+    const userId = await getCurrentUserId();
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    // Get workspace users for populating assignee data
+    const workspaceUsers = await prisma.user.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true, image: true },
+    });
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        assigneeId: userId,
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        business: true,
+        contact: true,
+        tags: true,
+        comments: {
+          select: { id: true },
+        },
+      },
+    });
+
+    // Format tickets to match the Ticket interface
+    return tickets.map((ticket) => {
+      const assignee = workspaceUsers.find(
+        (user) => user.id === ticket.assigneeId
+      );
+
+      return {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description || "",
+        status: ticket.status,
+        priority: ticket.priority,
+        businessName: ticket.business?.name || null,
+        contactName: ticket.contact?.name || null,
+        assignee: assignee?.name || null,
+        creator: ticket.creatorId || "",
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        dueDate: ticket.dueDate || null,
+        estimatedTime: ticket.estimatedTime || null,
+        tags: ticket.tags.map((tag) => tag.name),
+        commentCount: ticket.comments.length,
+      };
+    });
+  } catch (error) {
+    console.error("Failed to get assigned tickets:", error);
+    return [];
+  }
+}
+
+/**
+ * Get the count of tickets assigned to the current user
+ */
+export async function getUserAssignedTicketsCount(): Promise<number> {
+  try {
+    const userId = await getCurrentUserId();
+    const workspaceId = await getCurrentUserWorkspaceId();
+
+    const count = await prisma.ticket.count({
+      where: {
+        assigneeId: userId,
+        OR: [
+          { workspaceId },
+          {
+            business: {
+              workspaceId,
+            },
+          },
+        ],
+      },
+    });
+
+    return count;
+  } catch (error) {
+    console.error("Failed to get assigned tickets count:", error);
+    return 0;
+  }
+}
