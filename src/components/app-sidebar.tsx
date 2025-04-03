@@ -46,7 +46,7 @@ const data = {
       icon: IconUsers,
     },
     {
-      title: "Kunder",
+      title: "Personer",
       url: "/customers",
       icon: IconUserCircle,
     },
