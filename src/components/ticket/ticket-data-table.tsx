@@ -541,6 +541,17 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
       className="w-full flex-col justify-start gap-6"
     >
       <div className="flex items-center justify-between px-4 lg:px-6">
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Søk i saker..."
+            className="w-[180px]"
+            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+            onChange={(e) =>
+              table.getColumn("title")?.setFilterValue(e.target.value)
+            }
+          />
+        </div>
+
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
           <TabsTrigger value="all">
             Alle saker <Badge variant="secondary">{statusCounts.all}</Badge>
@@ -651,16 +662,6 @@ export function TicketDataTable({ data: initialData }: { data: Ticket[] }) {
 
       {/* Main content area */}
       <div className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
-        <div className="flex items-center gap-4 mb-4">
-          <Input
-            placeholder="Søk i saker..."
-            className="max-w-sm"
-            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-            onChange={(e) =>
-              table.getColumn("title")?.setFilterValue(e.target.value)
-            }
-          />
-        </div>
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
