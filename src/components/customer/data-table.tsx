@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DeleteSelectedButton } from "./delete-selected-button";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -69,6 +70,17 @@ export function DataTable<TData, TValue>({
     },
   });
 
+  // Helper function to reset row selection
+  const resetRowSelection = () => {
+    setRowSelection({});
+  };
+
+  // Get selected customer IDs
+  const getSelectedCustomerIds = (): string[] => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    return selectedRows.map((row) => (row.original as any).id);
+  };
+
   return (
     <div className="w-full">
       <div className="flex items-center py-4 gap-2">
@@ -84,6 +96,14 @@ export function DataTable<TData, TValue>({
             className="max-w-sm"
           />
         )}
+
+        {table.getFilteredSelectedRowModel().rows.length > 0 && (
+          <DeleteSelectedButton
+            selectedCustomers={getSelectedCustomerIds()}
+            onCustomersDeleted={resetRowSelection}
+          />
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto">

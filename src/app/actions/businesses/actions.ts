@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { Business, Contact, Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 /**
  * Get current user's workspace ID
@@ -246,5 +247,49 @@ export async function deleteBusiness(id: string) {
     throw new Error(
       error instanceof Error ? error.message : "Failed to delete business"
     );
+  }
+}
+
+export async function deleteBusinesses(
+  businessIds: string[],
+  deleteContacts: boolean = false
+) {
+  try {
+    const session = await getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const db = await prisma;
+
+    // First delete contacts if requested
+    if (deleteContacts) {
+      await db.contact.deleteMany({
+        where: {
+          businessId: {
+            in: businessIds,
+          },
+        },
+      });
+    }
+
+    // Then delete the businesses
+    const deletedBusinesses = await db.business.deleteMany({
+      where: {
+        id: {
+          in: businessIds,
+        },
+      },
+    });
+
+    // Don't use revalidatePath since it's causing issues
+    // Let the client refresh the data instead
+    return { success: true, count: deletedBusinesses.count };
+  } catch (error) {
+    console.error("Failed to delete businesses:", error);
+    return { success: false, error: (error as Error).message };
   }
 }

@@ -622,8 +622,27 @@ export async function syncEmails(params: SyncEmailsParams = {}) {
       throw new Error("User not found");
     }
 
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
+    }
+
     if (!user.emailProvider) {
       throw new Error("No email provider connected");
+    }
+
+    // Verify businessId belongs to user's workspace if provided
+    if (params.businessId) {
+      const business = await prisma.business.findFirst({
+        where: {
+          id: params.businessId,
+          workspaceId: user.workspaceId,
+        },
+        select: { id: true },
+      });
+
+      if (!business) {
+        throw new Error("Business not found in your workspace");
+      }
     }
 
     // Check if token is expired and refresh if needed
@@ -731,6 +750,10 @@ export async function updateEmail(params: UpdateEmailParams) {
       throw new Error("User not found");
     }
 
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
+    }
+
     const { emailId, isRead, isStarred, businessId, contactId } = params;
 
     // Verify email ownership
@@ -746,6 +769,38 @@ export async function updateEmail(params: UpdateEmailParams) {
 
     if (!email) {
       throw new Error("Email not found or access denied");
+    }
+
+    // If connecting to a business, verify it belongs to user's workspace
+    if (businessId) {
+      const business = await prisma.business.findFirst({
+        where: {
+          id: businessId,
+          workspaceId: user.workspaceId,
+        },
+        select: { id: true },
+      });
+
+      if (!business) {
+        throw new Error("Business not found in your workspace");
+      }
+    }
+
+    // If connecting to a contact, verify it belongs to user's workspace
+    if (contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: {
+          id: contactId,
+          business: {
+            workspaceId: user.workspaceId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!contact) {
+        throw new Error("Contact not found in your workspace");
+      }
     }
 
     // Build update object with only defined fields
@@ -852,13 +907,20 @@ export async function associateEmailsWithBusiness(
       throw new Error("User not found");
     }
 
-    // Verify business exists
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
+    }
+
+    // Verify business exists and belongs to user's workspace
+    const business = await prisma.business.findFirst({
+      where: {
+        id: businessId,
+        workspaceId: user.workspaceId,
+      },
     });
 
     if (!business) {
-      throw new Error("Business not found");
+      throw new Error("Business not found in your workspace");
     }
 
     // Update all emails
@@ -917,9 +979,16 @@ export async function fetchBusinessEmails(
       throw new Error("User not found");
     }
 
-    // Get the business with contacts to ensure it exists
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
+    }
+
+    // Get the business with contacts to ensure it exists and belongs to user's workspace
+    const business = await prisma.business.findFirst({
+      where: {
+        id: businessId,
+        workspaceId: user.workspaceId,
+      },
       include: {
         contacts: {
           select: { id: true, email: true, name: true },
@@ -928,7 +997,7 @@ export async function fetchBusinessEmails(
     });
 
     if (!business) {
-      throw new Error("Business not found");
+      throw new Error("Business not found in your workspace");
     }
 
     // Collect all contact IDs from the business

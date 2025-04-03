@@ -9,8 +9,8 @@ import { columns } from "@/components/business/columns";
 import { ImportButton } from "@/components/business/import-button";
 
 export const metadata = {
-  title: "Businesses | CRM",
-  description: "Manage all your businesses in one place",
+  title: "Bedrifter | CRM",
+  description: "Behandle alle bedriftene i ett sted",
 };
 
 export default async function BusinessesPage() {
@@ -27,18 +27,18 @@ export default async function BusinessesPage() {
 
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Businesses</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Bedrifter</h1>
           <div className="flex gap-2">
             <ImportButton />
             <Link href="/businesses/new">
               <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add Business
+                <Plus className="mr-2 h-4 w-4" /> Legg til bedrift
               </Button>
             </Link>
           </div>
         </div>
 
-        <div className="rounded-md border">
+        <div className="">
           <DataTable columns={columns} data={businesses} />
         </div>
       </div>

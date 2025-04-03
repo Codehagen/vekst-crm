@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, Trash, ExternalLink } from "lucide-react";
+import {
+  ArrowUpDown,
+  MoreHorizontal,
+  Trash,
+  ExternalLink,
+  AlertCircle,
+} from "lucide-react";
 import { Business } from "@prisma/client";
 import Link from "next/link";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +27,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { DeleteDialog } from "./delete-dialog";
+import { deleteCustomers } from "@/app/actions/customers/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 // Column definitions
 export const columns: ColumnDef<Business>[] = [
@@ -222,6 +240,29 @@ export const columns: ColumnDef<Business>[] = [
     cell: ({ row }) => {
       const customer = row.original;
       const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+      const [isDeleting, setIsDeleting] = useState(false);
+      const [deleteBusinesses, setDeleteBusinesses] = useState(false);
+
+      const handleDelete = async () => {
+        try {
+          setIsDeleting(true);
+          const result = await deleteCustomers([customer.id], deleteBusinesses);
+
+          if (result.success) {
+            toast.success(`Kunden "${customer.name}" ble slettet`);
+            // Reload the page to refresh the data
+            window.location.reload();
+          } else {
+            toast.error(`Kunne ikke slette kunden: ${result.error}`);
+          }
+        } catch (error) {
+          console.error("Error deleting customer:", error);
+          toast.error("Kunne ikke slette kunden");
+        } finally {
+          setIsDeleting(false);
+          setShowDeleteDialog(false);
+        }
+      };
 
       return (
         <>
@@ -248,23 +289,61 @@ export const columns: ColumnDef<Business>[] = [
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setShowDeleteDialog(true)}
-                className="text-destructive focus:text-destructive flex items-center gap-2"
+                className="text-destructive focus:text-destructive"
               >
-                <Trash className="h-4 w-4" />
-                <span>Slett kunde</span>
+                Slett kunde
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DeleteDialog
-            customer={customer}
-            open={showDeleteDialog}
-            onOpenChange={setShowDeleteDialog}
-            onSuccess={() => {
-              // This will be handled by the parent component
-              window.location.reload();
-            }}
-          />
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  Bekreft sletting
+                </DialogTitle>
+                <DialogDescription>
+                  Er du sikker på at du vil slette kunden "{customer.name}"?
+                  Denne handlingen kan ikke angres.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex items-start space-x-2 pt-2">
+                <Checkbox
+                  id="delete-businesses"
+                  checked={deleteBusinesses}
+                  onCheckedChange={(checked) =>
+                    setDeleteBusinesses(checked === true)
+                  }
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label htmlFor="delete-businesses">
+                    Slett også tilknyttede bedrifter
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Hvis ikke valgt vil bedriftene bli bevart.
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter className="sm:justify-end">
+                <DialogClose asChild>
+                  <Button type="button" variant="secondary">
+                    Avbryt
+                  </Button>
+                </DialogClose>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Sletter..." : "Slett"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       );
     },

@@ -9,6 +9,7 @@ import {
   Contact,
 } from "@prisma/client";
 import Link from "next/link";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +22,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { deleteBusinesses } from "@/app/actions/businesses/actions";
+import { toast } from "sonner";
 
 // Helper function to get stage badge
 function getStageBadge(stage: CustomerStage) {
@@ -152,27 +156,64 @@ export const columns: ColumnDef<BusinessWithContacts>[] = [
     id: "actions",
     cell: ({ row }) => {
       const business = row.original;
+      const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+      const [isDeleting, setIsDeleting] = useState(false);
+
+      const handleDelete = async (deleteContacts: boolean) => {
+        try {
+          setIsDeleting(true);
+          const result = await deleteBusinesses([business.id], deleteContacts);
+
+          if (result.success) {
+            toast.success("Business deleted successfully");
+            // Refresh the page to show updated data
+            window.location.reload();
+          } else {
+            toast.error(`Failed to delete: ${result.error}`);
+          }
+        } catch (error) {
+          toast.error(`An error occurred: ${(error as Error).message}`);
+        } finally {
+          setIsDeleting(false);
+          setShowDeleteDialog(false);
+        }
+      };
 
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Åpne meny</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Handlinger</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-              <Link href={`/businesses/${business.id}`}>Se detaljer</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/businesses/${business.id}/edit`}>Rediger</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Slett</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Åpne meny</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Handlinger</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href={`/businesses/${business.id}`}>Se detaljer</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`/businesses/${business.id}/edit`}>Rediger</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                Slett
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DeleteConfirmationDialog
+            isOpen={showDeleteDialog}
+            onClose={() => setShowDeleteDialog(false)}
+            onConfirm={handleDelete}
+            businessCount={1}
+            isDeleting={isDeleting}
+          />
+        </>
       );
     },
   },

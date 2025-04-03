@@ -22,6 +22,7 @@ interface ImportOptions {
  */
 export async function importCustomersFromEmails(
   userId: string,
+  workspaceId: string,
   options: ImportOptions = {}
 ): Promise<ImportStats> {
   // Set default options
@@ -102,6 +103,7 @@ export async function importCustomersFromEmails(
     // 3. Get existing businesses to avoid duplicates
     const existingBusinesses = await prisma.business.findMany({
       where: {
+        workspaceId, // Only check businesses in the current workspace
         OR: [
           { email: { in: Object.keys(contactMap) } },
           // Add domain checking logic here
@@ -141,15 +143,43 @@ export async function importCustomersFromEmails(
     // 5. Create businesses for potential customers
     for (const [email, data] of potentialCustomers) {
       try {
+        // Check if this is a personal email domain
+        const domain = extractDomainFromEmail(email);
+        const personalEmailDomains = [
+          "gmail.com",
+          "hotmail.com",
+          "outlook.com",
+          "yahoo.com",
+          "icloud.com",
+          "aol.com",
+          "protonmail.com",
+          "mail.com",
+          "live.com",
+          "msn.com",
+          "me.com",
+        ];
+
+        const isPersonalEmail = domain
+          ? personalEmailDomains.includes(domain.toLowerCase())
+          : false;
+
+        // Generate appropriate notes based on type of email
+        const notes = isPersonalEmail
+          ? `Automatically created from personal email contact. Found in ${data.count} emails.`
+          : `Automatically created from business email domain. Found in ${data.count} emails.`;
+
         // Create the new business
         const newBusiness = await prisma.business.create({
           data: {
-            name: data.name || getOrganizationFromEmail(email),
+            name: data.name || getOrganizationFromEmail(email, data.name),
             email: email,
             phone: "", // Required field but we don't have it from emails
             status: "active",
             stage: importLeadsOnly ? "lead" : "customer",
-            notes: `Automatically created from email history. Found in ${data.count} emails.`,
+            notes: notes,
+            workspace: {
+              connect: { id: workspaceId },
+            },
           },
         });
 
@@ -296,19 +326,62 @@ function extractDomainFromEmail(email: string): string | null {
 }
 
 /**
- * Generates organization name from email domain
+ * Generates organization name from email domain or returns the contact name for personal emails
  */
-function getOrganizationFromEmail(email: string): string {
+function getOrganizationFromEmail(
+  email: string,
+  contactName: string | null = null
+): string {
   const domain = extractDomainFromEmail(email);
 
-  if (!domain) return "Unknown Organization";
+  if (!domain) return contactName || "Unknown Organization";
 
-  // Extract the main part of the domain (remove TLD)
-  const mainPart = domain.split(".")[0];
+  // List of common personal email domains - these should use the person's name directly
+  const personalEmailDomains = [
+    "gmail.com",
+    "hotmail.com",
+    "outlook.com",
+    "yahoo.com",
+    "icloud.com",
+    "aol.com",
+    "protonmail.com",
+    "mail.com",
+    "live.com",
+    "msn.com",
+    "me.com",
+  ];
 
-  // Capitalize and clean up the domain name
+  // If this is a personal email domain and we have a contact name, use that directly
+  if (personalEmailDomains.includes(domain.toLowerCase()) && contactName) {
+    return contactName;
+  }
+
+  // If this is a personal email but we don't have a name, use a generic name with username
+  if (personalEmailDomains.includes(domain.toLowerCase())) {
+    const username = email.split("@")[0];
+    return `${username.charAt(0).toUpperCase() + username.slice(1)}`;
+  }
+
+  // Otherwise, proceed with formatting the domain as a business name
+  // Remove common TLDs
+  const withoutTld = domain.replace(
+    /\.(com|net|org|io|co|app|info|biz|dev|uk|us|eu|ca)$/i,
+    ""
+  );
+
+  // Extract the main part of the domain (remove subdomains)
+  const parts = withoutTld.split(".");
+  const mainPart = parts[0];
+
+  // For single-word domains with no separators, ensure proper capitalization
+  if (!mainPart.includes("-") && !mainPart.includes("_")) {
+    // Simple word - just capitalize first letter
+    return mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
+  }
+
+  // Capitalize and clean up the domain name for multi-part domains
   return mainPart
-    .split(/[.-]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .split(/[.-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
 }

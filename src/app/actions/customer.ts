@@ -35,6 +35,10 @@ export async function importCustomersFromEmailsAction(
       throw new Error("User not found");
     }
 
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
+    }
+
     // Ensure email provider is connected
     if (!user.emailProvider) {
       return {
@@ -43,8 +47,12 @@ export async function importCustomersFromEmailsAction(
       };
     }
 
-    // Run the import process
-    const importStats = await importCustomersFromEmails(user.id, options);
+    // Run the import process with workspace ID
+    const importStats = await importCustomersFromEmails(
+      user.id,
+      user.workspaceId,
+      options
+    );
 
     // Revalidate relevant paths
     revalidatePath("/dashboard");
@@ -140,6 +148,10 @@ export async function importBusinessesFromDomains(options: {
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    if (!user.workspaceId) {
+      throw new Error("No workspace found for user");
     }
 
     // Ensure email provider is connected
@@ -265,28 +277,65 @@ export async function importBusinessesFromDomains(options: {
             : `info@${domain}`; // Use a placeholder as fallback
 
         const isPlaceholderEmail = fromEmails.length === 0;
-        let notesText = `Automatically created from email domain ${domain}. Found in ${data.emails.length} emails.`;
 
-        if (isPlaceholderEmail) {
-          notesText += " Email address is a placeholder.";
-        }
+        // Check if this is a personal email domain
+        const personalEmailDomains = [
+          "gmail.com",
+          "hotmail.com",
+          "outlook.com",
+          "yahoo.com",
+          "icloud.com",
+          "aol.com",
+          "protonmail.com",
+          "mail.com",
+          "live.com",
+          "msn.com",
+          "me.com",
+        ];
+
+        const isPersonalDomain = personalEmailDomains.includes(
+          domain.toLowerCase()
+        );
+
+        // Get contact person if available
+        const contactPerson =
+          data.contacts.size > 0
+            ? Array.from(data.contacts.values())[0].name
+            : "";
+
+        // For personal email domains, use the person's name as the business name
+        // For regular domains, format the domain name as before
+        const businessName =
+          isPersonalDomain && contactPerson
+            ? contactPerson
+            : transformDomains
+            ? data.name || formatDomainAsBusinessName(domain)
+            : domain.split(".")[0];
+
+        // Generate notes text based on domain type
+        const notesText = isPersonalDomain
+          ? `Automatically created from personal email contact. Found in ${data.emails.length} emails.`
+          : `Automatically created from business domain ${domain}. Found in ${data.emails.length} emails.`;
+
+        // Add placeholder note if needed
+        const finalNotes = isPlaceholderEmail
+          ? `${notesText} Email address is a placeholder.`
+          : notesText;
 
         // Create the business
         const business = await prisma.business.create({
           data: {
-            name: transformDomains
-              ? data.name || formatDomainAsBusinessName(domain)
-              : domain.split(".")[0],
+            name: businessName,
             email: businessEmail,
             phone: "", // Required field
             status: "active",
             stage: importAsLeads ? "lead" : "customer",
-            notes: notesText,
+            notes: finalNotes,
             // If we have contacts, use the first contact's name as contactPerson
-            contactPerson:
-              data.contacts.size > 0
-                ? Array.from(data.contacts.values())[0].name
-                : "",
+            contactPerson: contactPerson,
+            workspace: {
+              connect: { id: user.workspaceId },
+            },
           },
         });
 
@@ -447,6 +496,19 @@ function formatDomainAsBusinessName(domain: string): string {
       ? parts.slice(0, -1).join(".") // Handle country-specific TLDs
       : parts[0];
 
+  // For single-word domains with no separators, ensure proper capitalization
+  if (
+    !mainPart.includes("-") &&
+    !mainPart.includes("_") &&
+    !mainPart.includes(".")
+  ) {
+    // Check for camelCase or internal caps like "ihainvest" or "webtop"
+    if (/^[a-z]+$/.test(mainPart)) {
+      // Simple lowercase domain - just capitalize first letter
+      return mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
+    }
+  }
+
   // Split by common separators and capitalize each part
   return mainPart
     .split(/[-_.]/)
@@ -456,7 +518,8 @@ function formatDomainAsBusinessName(domain: string): string {
         // Split camelCase - e.g., "MyCompany" -> "My Company"
         return part.replace(/([a-z])([A-Z])/g, "$1 $2");
       }
-      return part.charAt(0).toUpperCase() + part.slice(1);
+      // Always capitalize the first letter of each part
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
     })
     .join(" ");
 }
